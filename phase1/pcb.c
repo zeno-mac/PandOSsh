@@ -71,8 +71,7 @@ void mkEmptyProcQ(struct list_head * head){
 
 int emptyProcQ(struct list_head *head){
     /*Return TRUE if the queue whose head is pointed to by head is empty. Return FALSE otherwise.*/
-    if(head!=NULL && head->next==head) return TRUE;
-    return FALSE;
+    return list_empty(head);
 }
 
 void insertProcQ(struct list_head *head, pcb_t *p){
@@ -80,58 +79,46 @@ void insertProcQ(struct list_head *head, pcb_t *p){
     The list must be ordered by priority. In case of equal priority, the new PCB must be inserted
     after the last PCB with this priority. For example, if you insert PCB N with priority 10 to the
     queue, A(20), B(10), C(0), the list becomes A(20), B(10), N(10), C(0).*/
-    struct list_head * curr= head->next; 
+    struct list_head * curr;
     int pPrio=p->p_prio;
-    while(curr!=head ){ //curr==null è IMPOSSIBILE
+    list_for_each(curr,head){
         int currPrio=container_of(curr, pcb_t, p_list)->p_prio;
         if(currPrio<pPrio) break;
-        curr=curr->next;
-    }//qui bisogna inserire p, curr punta a un nodo con prio < di pPrio
-    struct list_head * prec=curr->prev;
-    struct list_head * pHead=&(p->p_list);
-    pHead->next=curr;
-    pHead->prev=prec;
-    prec->next=pHead;
-    curr->prev=pHead;    
-}
+    }
+    list_add(&(p->p_list), curr->prev);
+    
+    }
 
 pcb_t *headProcQ(struct list_head *head){
     /*Return a pointer to the first PCB (i.e. the PCB with max priority) from the process queue
     whose head is pointed to by head. Do not remove this PCB from the process queue. 
     Return NULL if the process queue is empty*/
-    if(head->next==head) return NULL; //coda vuota
-    return container_of(head->next, pcb_t, p_list);;//?????????????????????????????????????
+    if(list_empty(head)) return NULL; //coda vuota
+    return container_of(list_next(head), pcb_t, p_list);
 }
 
 pcb_t *removeProcQ(struct list_head *head){
     /*Remove a pointer to the first PCB (i.e. the PCB with max priority) from the process queue
     whose head is pointed to by head. Return NULL if the process queue was initially empty;
     otherwise return the pointer to the removed element*/
-    struct list_head * first=head->next;
-    if(first==head) return NULL;
-    pcb_t * retVal=container_of(head->next, pcb_t, p_list);
-    struct list_head * second=first->next;
-    head->next=second;
-    second->prev=head;
-    return retVal;
+    if(list_empty(head)) return NULL;
+    pcb_t * retVal=container_of(list_next(head), pcb_t, p_list);
+    list_del(head->next); 
+   
 }
 
 pcb_t *outProcQ(struct list_head *head, pcb_t *p){
     /*Remove the PCB pointed to by p from the process queue whose head pointer is pointed to by
     head. If the desired entry is not in the indicated queue (an error condition), return NULL;
     otherwise, return p. Note that p can point to any element of the process queue.*/
-    struct list_head * curr=head->next;
+    struct list_head * curr=list_next(head);
     struct list_head * prec=head;
-    
-    while(curr!=head){
+    list_for_each(curr,head){
         if(p==container_of(curr,pcb_t,p_list)){
             //devo rimuovere curr e ritornare p
-            prec->next=curr->next;
-            curr->next->prev=prec;
+            list_del(curr);
             return p;
-        } 
-        prec=curr;
-        curr=curr->next;
+        }
     }
     return NULL;
 }
