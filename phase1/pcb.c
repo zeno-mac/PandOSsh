@@ -47,7 +47,7 @@ void initPcb(pcb_t *p)
 
 pcb_t *allocPcb()
 {
-    struct list_head *list = list_next(&pcbFree_h);
+    struct list_head *list = list_next(&pcbFree_h); // list_empty??
     if (list == NULL)
     {
         return NULL;
@@ -65,8 +65,7 @@ pcb_t *allocPcb()
 void mkEmptyProcQ(struct list_head * head){
     /*this method is used to initialize a variable to be head pointer to a process queue.*/
     if(head!=NULL){
-        head->next=head;
-        head->prev=head;
+        INIT_LIST_HEAD(head);
     }
 }
 
