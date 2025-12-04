@@ -104,7 +104,7 @@ pcb_t *removeProcQ(struct list_head *head){
     if(list_empty(head)) return NULL;
     pcb_t * retVal=container_of(list_next(head), pcb_t, p_list);
     list_del(head->next); 
-   
+    return retVal; 
 }
 
 pcb_t *outProcQ(struct list_head *head, pcb_t *p){
@@ -112,7 +112,6 @@ pcb_t *outProcQ(struct list_head *head, pcb_t *p){
     head. If the desired entry is not in the indicated queue (an error condition), return NULL;
     otherwise, return p. Note that p can point to any element of the process queue.*/
     struct list_head * curr=list_next(head);
-    struct list_head * prec=head;
     list_for_each(curr,head){
         if(p==container_of(curr,pcb_t,p_list)){
             //devo rimuovere curr e ritornare p
