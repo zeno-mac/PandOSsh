@@ -107,7 +107,7 @@ pcb_t *removeProcQ(struct list_head *head){
     return retVal; 
 }
 
-pcb_t *outProcQ(struct list_head *head, pcb_t *p){
+pcb_t *outProcQ(struct list_head *head, pcb_t *p){//prova
     /*Remove the PCB pointed to by p from the process queue whose head pointer is pointed to by
     head. If the desired entry is not in the indicated queue (an error condition), return NULL;
     otherwise, return p. Note that p can point to any element of the process queue.*/
