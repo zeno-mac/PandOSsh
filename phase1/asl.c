@@ -27,11 +27,11 @@ int insertBlocked(int* semAdd, pcb_t* p) {
     }
 
     if (!(list_empty(&semdFree_h))){
-        struct list_head *first = semdFree_h.next;
+        struct list_head *first = list_next(&semdFree_h);
         struct semd_t *new_sem = container_of(first,semd_t,s_link);
         list_del(first);
         new_sem->s_key = semAdd;
-        INIT_LIST_HEAD(&new_sem->s_procq); //same as mkEmptyProcQ()   
+        mkEmptyProcQ(&new_sem->s_procq); 
         list_add(&new_sem->s_link, &semd_h); //(da implementare) da quello che ho capito i semafori sono ordinato in ordine crescente di chiave
         list_add_tail(&p->p_list, &new_sem->s_procq); //insert the PCB pointed to by p at the tail of the process queue 
         p->p_semAdd = semAdd;
@@ -46,12 +46,13 @@ pcb_t* removeBlocked(int* semAdd) {
     list_for_each_entry(curr, &semd_h, s_link) //search the semaphore whose key = semAdd 
     {
         if (curr->s_key == semAdd){
-            struct list_head *first = curr->s_procq.next;
+            struct list_head *first = list_next(&curr->s_procq);
             pcb_t *p = container_of(first,pcb_t,p_list);
         
             list_del(first); //remove first element form s_procq
-            if(list_empty(&curr->s_procq)){
+            if(emptyProcQ(&curr->s_procq)){
                 list_del(&curr->s_link);
+                curr->s_key = NULL; //aggiunto ma non necessario teoricamente
                 list_add(&curr->s_link, &semdFree_h);
             }
             return p;
@@ -71,8 +72,9 @@ pcb_t* outBlocked(pcb_t* p) {
                 struct pcb_t *p_curr = container_of(pos,pcb_t,p_list);
                 if (p == p_curr){
                     list_del(&p->p_list);
-                    if(list_empty(&curr->s_procq)){
+                    if(emptyProcQ(&curr->s_procq)){
                         list_del(&curr->s_link); 
+                        curr->s_key = NULL; //aggiunto ma non necessario teoricamente
                         list_add(&curr->s_link, &semdFree_h);
                     }
                     return p;
@@ -90,8 +92,8 @@ pcb_t* headBlocked(int* semAdd) {
     {
         if (curr->s_key == semAdd)
         {
-            struct pcb_t *p_head = container_of(curr->s_procq.next,pcb_t,p_list);
-            return (p_head);
+            //return headProcQ(&curr->s_procq);
+            return container_of(list_next(&curr->s_procq),pcb_t,p_list);//yesh
         }
     }
     return NULL;
