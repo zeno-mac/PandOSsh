@@ -32,7 +32,7 @@ int insertBlocked(int* semAdd, pcb_t* p) {
         list_del(first);
         new_sem->s_key = semAdd;
         INIT_LIST_HEAD(&new_sem->s_procq); //same as mkEmptyProcQ()   
-        list_add(&new_sem->s_link, &semd_h); //non so cosa significa (at the appropriate position)
+        list_add(&new_sem->s_link, &semd_h); //(da implementare) da quello che ho capito i semafori sono ordinato in ordine crescente di chiave
         list_add_tail(&p->p_list, &new_sem->s_procq); //insert the PCB pointed to by p at the tail of the process queue 
         p->p_semAdd = semAdd;
         return FALSE;
