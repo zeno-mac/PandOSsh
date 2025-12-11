@@ -22,7 +22,7 @@ int insertBlocked(int* semAdd, pcb_t* p) {
 
         if (curr->s_key == semAdd)
         {
-            insertProcQ(&curr->s_procq, p);
+            insertProcQ(&curr->s_procq, p); //non bisogna usare funzioni all'esterno di asl.c
             p->p_semAdd = semAdd;
             return FALSE;
         }
@@ -37,11 +37,11 @@ int insertBlocked(int* semAdd, pcb_t* p) {
         struct semd_t *newsem = container_of(ptr, semd_t, s_link);
 
         newsem->s_key = semAdd;
-        mkEmptyProcQ(&newsem->s_procq);
+        mkEmptyProcQ(&newsem->s_procq);//non bisogna usare funzioni all'esterno di asl.c
         list_add(&newsem->s_link, &semd_h);
 
         p->p_semAdd = semAdd;
-        insertProcQ(&newsem->s_procq, p);
+        insertProcQ(&newsem->s_procq, p);//non bisogna usare funzioni all'esterno di asl.c
         return FALSE;
     }
     return TRUE;
@@ -60,7 +60,7 @@ pcb_t* headBlocked(int* semAdd) {
     {
         if (curr->s_key == semAdd)
         {
-            return headProcQ(&curr->s_procq);
+            return headProcQ(&curr->s_procq);//non bisogna usare funzioni all'esterno di asl.c
         }
     }
     return NULL;
