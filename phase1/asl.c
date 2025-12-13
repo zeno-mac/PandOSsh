@@ -31,35 +31,14 @@ int insertBlocked(int* semAdd, pcb_t* p) {
         struct semd_t *new_sem = container_of(first,semd_t,s_link);
         list_del(first);
         new_sem->s_key = semAdd;
-        mkEmptyProcQ(&new_sem->s_procq);  
-        
-        struct semd_t *ord;
-        list_for_each_entry(ord, &semd_h, s_link) //search the semaphore whose key = semAdd 
-        {
-            if (ord->s_key > new_sem->s_key){
-                __list_add(&new_sem->s_link,list_prev(&ord->s_link),list_next(&ord->s_link)); //insert the PCB pointed to  by p at the tail of the process queue 
-            }
-        }
-
-        //insertOrdered(&new_sem, &semd_h); //(da implementare) da quello che ho capito i semafori sono ordinato in ordine crescente di chiave
+        mkEmptyProcQ(&new_sem->s_procq);
+        list_add_tail(&new_sem->s_link,&semd_h);  //add the new semaphore in the ASL follwing FIFO
         list_add_tail(&p->p_list, &new_sem->s_procq); //insert the PCB pointed to by p at the tail of the process queue 
         p->p_semAdd = semAdd;
         return FALSE;
     }
     return TRUE;
 }
-/*
-void insertOrdered(struct semd_t *new,struct list_head *head){
-    struct semd_t *curr;
-
-    list_for_each_entry(curr, &head, s_link) //search the semaphore whose key = semAdd 
-    {
-        if (curr->s_key > new->s_key){
-            __list_add(&new->s_link,list_prev(&curr->s_link),list_next(&curr->s_link)); //insert the PCB pointed to  by p at the tail of the process queue 
-        }
-    }
-
-}*/
 
 
 
