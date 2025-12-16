@@ -77,7 +77,7 @@ pcb_t* outBlocked(pcb_t* p) {
                     list_del(&p->p_list);
                     if(emptyProcQ(&curr->s_procq)){   //case for which after deleting the element the semaphore become inactive
                         list_del(&curr->s_link); 
-                        curr->s_key = NULL; //aggiunto ma non necessario teoricamente
+                        curr->s_key = NULL;
                         list_add(&curr->s_link, &semdFree_h);
                     }
                     return p;
@@ -95,8 +95,7 @@ pcb_t* headBlocked(int* semAdd) {
     {
         if (curr->s_key == semAdd)
         {
-            //return headProcQ(&curr->s_procq);
-            return container_of(list_next(&curr->s_procq),pcb_t,p_list);//yesh
+            return headProcQ(&curr->s_procq);
         }
     }
     return NULL;
