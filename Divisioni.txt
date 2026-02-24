@@ -1,0 +1,53 @@
+Membro 1 (Zeno Maccari) : Inizializzazione e Scheduler (initial.c e scheduler.c)
+
+Questo ruolo costruisce le fondamenta del Nucleus e il motore che fa girare i processi.
+
+    Inizializzazione (main): Dichiarazione e inizializzazione delle variabili globali (Process Count, Soft-block Count, Ready Queue, semafori dei device) .
+
+    Pass Up Vector: Popolare il vettore per il processore 0 con gli indirizzi degli handler (eccezioni e TLB-Refill) .
+
+    Avvio: Istanziare il primo processo (test) e chiamare lo Scheduler .
+
+    Scheduler: Implementare l'algoritmo Round-Robin preemptive (time slice di 5 ms). Gestire i casi in cui la Ready Queue è vuota invocando le istruzioni del BIOS HALT, WAIT, o PANIC (per il deadlock) .
+
+Membro 2 (Milo e Luca): Gestione Processi e Sincronizzazione (Parte 1 di exceptions.c)
+
+Questo membro si occupa delle chiamate di sistema (SYSCALL) che manipolano l'albero dei processi e i semafori puri.
+
+    Creazione e Terminazione: Implementare CreateProcess (NSYS1) e TerminateProcess (NSYS2) . Attenzione: la terminazione richiede di eliminare ricorsivamente tutta la progenie e aggiornare Process Count .
+
+    Sincronizzazione: Implementare Passeren/P (NSYS3) e Verhogen/V (NSYS4) .
+
+    Utility SYSCALL: Gestire GetSupportData (NSYS8) , GetProcessID (NSYS9) e Yield (NSYS10) .
+
+    Perché minimizza le dipendenze: Lavora principalmente sulle code e sugli alberi implementati nella Fase 1 (Level 2).
+
+Membro 3 (Matteo Mazzetti) : Gestione Interrupt e I/O (interrupts.c + Parte di SYSCALL)
+
+Questo ruolo affronta l'interazione con l'hardware e i device.
+
+    Gestore degli Interrupt (interrupts.c): Riconoscere la priorità degli interrupt pendenti tramite la Interrupting Devices Bit Map .
+
+    Timer Hardware: Gestire gli interrupt del Processor Local Timer (PLT) e dell'Interval Timer (per il Pseudo-clock tick) .
+
+    Device Non-Timer: Calcolare gli indirizzi dei registri dei device, salvare lo status, mandare l'ACK e sbloccare i processi in attesa tramite operazione V sui semafori .
+
+    SYSCALL bloccanti legate all'hardware: Implementare DoIO (NSYS5) e WaitForClock (NSYS7) .
+
+    Perché minimizza le dipendenze: Le SYSCALL 5 e 7 sono l'esatto opposto (l'operazione P) di ciò che fa l'interrupt handler (l'operazione V). Averle sviluppate dalla stessa persona garantisce che la logica dei semafori dei device coincida perfettamente .
+
+Membro 4 (Milo e Luca): Router Eccezioni, Pass Up or Die e Gestione Tempo (Parte 2 di exceptions.c)
+
+Questo ruolo fa da vigile urbano per le eccezioni e gestisce i casi limite, oltre al tracciamento del tempo CPU.
+
+    Entry Point Eccezioni: Scrivere lo switch/case generale che decodifica la causa dell'eccezione (CAUSE_IS_INT, SYSCALL, TLB, ecc.) e smista il flusso di controllo .
+
+    Pass Up or Die: Implementare la logica per gestire le SYSCALL positive (1 e superiori), i Program Trap (codici 0-7, 9, 10, 12-23) e le eccezioni TLB (codici 24-28) . Se il processo ha la Support Structure, si passa il controllo al livello superiore copiando lo stato, altrimenti si esegue una TerminateProcess (il "Die") .
+
+    Sicurezza e Ritorno: Gestire il controllo user-mode vs kernel-mode per le SYSCALL negative (simulando un Program Trap se necessario) . Gestire l'incremento del Program Counter (PC + 4) per evitare loop infiniti al ritorno dalle eccezioni .
+
+    Gestione Tempo: Implementare GetCPUTime (NSYS6) e la logica complessa di calcolo del tempo usando il TOD clock .
+
+Un consiglio operativo: Il Membro 4 avrà bisogno della funzione TerminateProcess scritta dal Membro 2 per la parte "Die" del "Pass Up or Die". All'inizio, il Membro 4 può usare un semplice finto ciclo infinito (PANIC() o HALT()) come segnaposto finché il Membro 2 non ha finito.
+
+Siete pronti a dividervi i compiti così, o c'è una parte specifica (come ad esempio il salvataggio dei contesti o il calcolo del TOD clock) che vorreste analizzare meglio prima di partire?
