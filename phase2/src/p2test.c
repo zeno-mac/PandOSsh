@@ -15,8 +15,8 @@
  *		Modified by Michael Goldweber on June 19, 2020
  */
 
-#include "../headers/const.h"
-#include "../headers/types.h"
+#include "../../headers/const.h"
+#include "../../headers/types.h"
 #include <uriscv/liburiscv.h>
 
 typedef unsigned int devregtr;
