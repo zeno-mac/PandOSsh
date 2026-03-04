@@ -144,6 +144,18 @@ void uTLB_RefillHandler() {
 /*                 p1 -- the root process                            */
 /*                                                                   */
 void test() {
+
+    /*
+    //~~~~~~~~~~~~~~~~~~~~~~Temporary test for initial.c, scheduler.c and interrupts.c~~~~~~~~~~~~~~~~~~~~~~
+    while(1) {
+        // Just spin to consume time and trigger the PLT
+    }
+    */
+   
+
+
+
+
     SYSCALL(VERHOGEN, (int)&sem_testsem, 0, 0); /* V(sem_testsem)   */
     SYSCALL(VERHOGEN, (int)&sem_testsem, 0, 0);
     SYSCALL(VERHOGEN, (int)&sem_testsem, 0, 0);
