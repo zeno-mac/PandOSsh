@@ -6,6 +6,17 @@
 #include "../headers/initial.h"
 #include "../headers/scheduler.h"
 
+//----------------------TO AVOID MEMCPY ERRORS--------------------
+void *memcpy(void *dest, const void *src, unsigned int n) {
+    char *d = dest;
+    const char *s = src;
+    while (n--) {
+        *d++ = *s++;
+    }
+    return dest;
+}
+
+
 //Import global vars from initial.c
 extern struct list_head readyQueue; 
 //extern int processCount; 
@@ -55,7 +66,6 @@ void itInterruptHandler(){
 
     dispatch();
 }
-
 
 
 
