@@ -47,6 +47,7 @@ int main(){
     mkEmptyProcQ(&readyQueue);
     initPcbs();
     initASL();
+    initVector();
     LDIT(PSECOND);
 
     pcb_t* pcb = allocFirstPcb();
