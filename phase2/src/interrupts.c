@@ -18,24 +18,7 @@ state_t * getCurrExceptionState(){
     return GET_EXCEPTION_STATE_PTR(getPRID());
 }
 
-void interruptHandler(){
-    state_t * excState=getCurrExceptionState();
-    int excCause=excState->cause;
-    int excCode=(excCause & GETEXECCODE) >> CAUSESHIFT;
 
-    if(excCode==IL_CPUTIMER){
-        //Process Local Timer
-        pltInterruptHandler();
-    }
-    else if(excCode==IL_TIMER){
-        //Interval Timer
-        itInterruptHndler();
-    }
-    else if(excCode>=IL_DISK && excCode<=IL_TERMINAL){
-        //exceptions 17 to 21 for Devices
-        deviceInterruptHandler(excCode);
-    }
-}
 
 void pltInterruptHandler(){
     setTIMER(TIMESLICE); //let 5ms pass on the processor: 
@@ -73,3 +56,24 @@ void itInterruptHandler(){
     dispatch();
 }
 
+
+
+
+void interruptHandler(){
+    state_t * excState=getCurrExceptionState();
+    int excCause=excState->cause;
+    int excCode=(excCause & GETEXECCODE) >> CAUSESHIFT;
+
+    if(excCode==IL_CPUTIMER){
+        //Process Local Timer
+        pltInterruptHandler();
+    }
+    else if(excCode==IL_TIMER){
+        //Interval Timer
+        itInterruptHandler();
+    }
+    else if(excCode>=IL_DISK && excCode<=IL_TERMINAL){
+        //exceptions 17 to 21 for Devices
+        //deviceInterruptHandler(excCode);
+    }
+}

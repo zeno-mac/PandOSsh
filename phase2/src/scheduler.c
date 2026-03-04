@@ -4,6 +4,9 @@
 #include "../../headers/const.h"
 #include "../../headers/listx.h"
 
+#include <uriscv/liburiscv.h>
+#include "../../phase1/headers/pcb.h"
+
 extern struct list_head readyQueue;
 extern int processCount;
 extern int softBlock_count;
