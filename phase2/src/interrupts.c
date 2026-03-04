@@ -37,3 +37,39 @@ void interruptHandler(){
     }
 }
 
+void pltInterruptHandler(){
+    setTIMER(TIMESLICE); //let 5ms pass on the processor: 
+    if(currProc){
+        state_t * excState=getCurrExceptionState(); //Copy the processor state at the time of the interrupt
+        currProc->p_s=*excState; 
+
+        insertProcQ(&readyQueue, currProc); //Place the curr process on the ready queue
+    }
+
+    dispatch(); 
+}
+
+
+void itInterruptHandler(){
+    LDIT(PSECOND); //Acknowledging the interrupt by loading the Interval Timer with 100ms.
+
+    int * pseudoClockSem=&device_semaphores[NSUPPSEM]; //Get the last semaphore
+    pcb_t * unblockedPcb;
+
+    while((unblockedPcb=removeBlocked(pseudoClockSem))){ //Unlock all the procs waiting for a tick
+        insertProcQ(&readyQueue, unblockedPcb);
+        softBlock_count--;
+    }
+
+    *pseudoClockSem=0;
+
+    //Returning the control to the curr proc. if that exists. Identical to the pltInterruptHandler
+    if(currProc){
+        state_t *excState=getCurrExceptionState(); // Loading the state on the current proc.
+        currProc->p_s=*excState;
+        insertProcQ(&readyQueue, currProc);        
+    }
+
+    dispatch();
+}
+
