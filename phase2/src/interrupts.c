@@ -67,13 +67,101 @@ void itInterruptHandler(){
     dispatch();
 }
 
+void deviceInterruptHandler(int excCode){
+
+    int DevNo=-999;
+    int IntLineNo=-999;
+
+    switch (excCode){
+
+        case IL_DISK:
+            IntLineNo=3;
+            break;
+
+        case IL_FLASH:
+            IntLineNo=4;
+            break;
+
+        case IL_ETHERNET:
+            IntLineNo=5;
+            break;
+
+        case IL_PRINTER:
+            IntLineNo=6;
+            break;
+
+        case IL_TERMINAL:
+            IntLineNo=7;
+            break;        
+
+        default:
+            return;
+    }
+
+    int mapAddr=0x10000040+((IntLineNo-3)*WORDLEN); // startingAddress+(normilized line of 2nd table)*lengthOfWord
+    int bitmap=*((int*)mapAddr); //Saves in bitmap the value of the map pointed by the address
+
+    // Let's find which device actually triggered the interrupt
+    if(bitmap & DEV0ON) DevNo=0;
+    else if(bitmap & DEV1ON) DevNo=1;
+    else if(bitmap & DEV2ON) DevNo=2;
+    else if(bitmap & DEV3ON) DevNo=3;
+    else if(bitmap & DEV4ON) DevNo=4;
+    else if(bitmap & DEV5ON) DevNo=5;
+    else if(bitmap & DEV6ON) DevNo=6;
+    else if(bitmap & DEV7ON) DevNo=7;
+
+    if(DevNo==-999) return;
+
+    int devAddr=0x10000054+((IntLineNo-3)*0x80) + (DevNo*0x10); //startingAddress+(lineOffset)+(deviceOffset)
+    int semaphoreIdx=(IntLineNo-3)*DEVPERINT+DevNo;
+    int status;
+    
+    //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    if(IntLineNo==7){ // Check to see if this interrupt is generated from a terminal "sender"
+        int transmissionStatus=*((int*)(devAddr+0x8)); //Reads the transmission status register using the offset of 0x8
+        if((transmissionStatus & 0xFF)!=0){ // If the transimmion register contains a value, hence the transmission is completed
+            status=transmissionStatus; 
+            *((int*)(devAddr+0xC))=ACK; // Acknowledges the end of this transmission
+        }
+        else{ // The interrupts comes from the reciever
+            status=*((int*)(devAddr+0x0)); // Reads the reciever status
+            *((int*)(devAddr+0x4))=ACK; 
+            semaphoreIdx+=DEVPERINT; //Offsets the semaphore to the recieving semaphore index
+        }
+    }
+
+    // Remove first process waiting for that semaphore
+    int* deviceSem=&device_semaphores[semaphoreIdx];
+    pcb_t * unblockedPcb=removeBlocked(deviceSem);
+
+    if(unblockedPcb){
+        unblockedPcb->p_s.gpr[10]=status; // gpr[10] maps the a0 register that is used for syscall return values
+        insertProcQ(&readyQueue, unblockedPcb);
+        softBlock_count--;
+
+        // Saves the currProc state and puts him in the queue since there is another process(the unblocked one) who should be starting as we call the scheduler with dispatch()
+        if(currProc){
+            state_t * excState=getCurrExceptionState();
+            currProc->p_s=*excState;
+            insertProcQ(&readyQueue,currProc);
+        }
+        dispatch();
+
+    }
+
+}
 
 
 void interruptHandler(){
     state_t * excState=getCurrExceptionState();
     int excCause=excState->cause;
-    int excCode=(excCause & GETEXECCODE) >> CAUSESHIFT;
-
+    //int excCode=excCause & CAUSE_EXCCODE_MASK; What in the actual fuck is this constant!? 
+    //int exCCode=(excCause & GETEXECCODE) >> CAUSESHIFT;
+    int excCode = (excState->cause & 0x7FFFFFFF); // Done by Gemini, because how can I know what the value of a const is if nobody tells me
+    
+    
     if(excCode==IL_CPUTIMER){
         //Process Local Timer
         pltInterruptHandler();
