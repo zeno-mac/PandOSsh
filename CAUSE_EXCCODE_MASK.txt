@@ -1,0 +1,17 @@
+POICHE' NON E' STATA DEFINITA LA MASCHERA CAUSE_EXCCODE_MASK DA NESSUNA PARTE, QUI SEGUE LA SPIEGAZIONE DI COME SI CALCOLA:
+
+Nel PDF, a pagina 5, si trova la risposta in una nota a piè di pagina (Nota 1) relativa alla macro CAUSE_IS_INT:
+
+
+"The CAUSE_IS_INT macro checks if the most significant bit of the parameter is 1, if the most significant bit of the cause register is 1 it means that the exception was caused by an interrupt." 
+
+Questa frase è la chiave dell'architettura RISC-V. Ci dice che in un registro a 32 bit, il bit più significativo (il bit 31) funge esclusivamente da "bandierina" (flag) per indicare se l'evento è un interrupt (valore 1) oppure no.
+
+Questo implica matematicamente che il vero e proprio "codice dell'eccezione" è contenuto nei restanti 31 bit inferiori.
+Per leggere quel codice ignorando la bandierina dell'interrupt, devi usare un'operazione AND bit a bit (&) con una maschera che abbia:
+
+Il bit 31 impostato a 0 (per spegnere la bandierina).
+
+I bit dal 30 allo 0 impostati a 1 (per far passare inalterato il codice).
+
+In formato binario, questo numero è 01111111111111111111111111111111. Convertito in esadecimale, diventa esattamente 0x7FFFFFFF. Ecco da dove deriva il valore della costante CAUSE_EXCCODE_MASK e l'operazione da svolgere!
