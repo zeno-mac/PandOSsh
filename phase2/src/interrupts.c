@@ -41,6 +41,8 @@ void pltInterruptHandler(){
     }
 
     dispatch(); 
+    //LDST(getCurrExceptionState());
+
 }
 
 
@@ -65,6 +67,8 @@ void itInterruptHandler(){
     }
 
     dispatch();
+    //LDST(getCurrExceptionState()); 
+
 }
 
 void deviceInterruptHandler(int excCode){
@@ -147,8 +151,10 @@ void deviceInterruptHandler(int excCode){
             currProc->p_s=*excState;
             insertProcQ(&readyQueue,currProc);
         }
+        
+        
         dispatch();
-
+        //LDST(getCurrExceptionState());
     }
 
 }
@@ -172,6 +178,6 @@ void interruptHandler(){
     }
     else if(excCode>=IL_DISK && excCode<=IL_TERMINAL){
         //exceptions 17 to 21 for Devices
-        //deviceInterruptHandler(excCode);
+        deviceInterruptHandler(excCode);
     }
 }
