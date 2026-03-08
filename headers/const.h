@@ -77,7 +77,7 @@
 
 #define MSTATUS_MIE_MASK 0x8
 #define MSTATUS_MPIE_MASK 0x80
-#define MSTATUS_MPP_MASK 0x1800
+#define MSTATUS_MPP_MASK 0x1800 //isola i bit 12 e 11
 #define MIE_MTIE_MASK 0x40
 #define MIP_MTIP_MASK 0x40
 #define MIE_MSIE_MASK 0x8
@@ -89,8 +89,8 @@
 #define MSTATUS_MIE_BIT 3
 #define MSTATUS_MPRV_BIT 17
 #define MSTATUS_MPP_BIT 11
-#define MSTATUS_MPP_M 0x1800
-#define MSTATUS_MPP_U 0x0000
+#define MSTATUS_MPP_M 0x1800 //Kernel mode
+#define MSTATUS_MPP_U 0x0000 //User mode
 #define MSTATUS_MPP_MASK 0x1800
 
 /* Cause register constants */
