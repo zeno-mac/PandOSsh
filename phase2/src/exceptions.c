@@ -57,12 +57,16 @@ void syscallHandler() {
     return;
   }
   else{
+
+    excState->pc_epc += WORDLEN;
+
     switch (a0_numSys) {
       case CREATEPROCESS:
         excState->reg_a0 = nsys1(a1,a2,a3);
+        LDST(excState);
         break;
       case TERMINATEPROCESS:
-
+        nsys2(a1, excState);
         break;
       case PASSEREN:
 
