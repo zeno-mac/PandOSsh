@@ -1,6 +1,8 @@
 #include "../../headers/const.h"
 #include "../../headers/types.h"
 #include <uriscv/liburiscv.h>
+#include <uriscv/cpu.h> //NON AVREBBE SENSO INCLUDERE TUTTO CIO' CHE SI TROVA IN uriscv/ ?????????????????????????
+#include <uriscv/liburiscv.h>
 #include "../../phase1/headers/pcb.h"
 #include "../../phase1/headers/asl.h"
 #include "../headers/initial.h"
@@ -103,7 +105,7 @@ void deviceInterruptHandler(int excCode){
     }
 
     int mapAddr=0x10000040+((IntLineNo-3)*WORDLEN); // startingAddress+(normilized line of 2nd table)*lengthOfWord
-    int bitmap=*((int*)mapAddr); //Saves in bitmap the value of the map pointed by the address
+    int bitmap=*((int*)mapAddr); // Saves in bitmap the value of the map pointed by the address
 
     // Let's find which device actually triggered the interrupt
     if(bitmap & DEV0ON) DevNo=0;
@@ -117,11 +119,10 @@ void deviceInterruptHandler(int excCode){
 
     if(DevNo==-999) return;
 
-    int devAddr=0x10000054+((IntLineNo-3)*0x80) + (DevNo*0x10); //startingAddress+(lineOffset)+(deviceOffset)
-    int semaphoreIdx=(IntLineNo-3)*DEVPERINT+DevNo;
+    int devAddr=START_DEVREG+((IntLineNo-3)*0x80) + (DevNo*0x10); // startingAddress+(lineOffset)+(deviceOffset)
+    int semaphoreIdx=(IntLineNo-3)*DEVPERINT+DevNo; // To switch from matrix form to array you get the deviceLine and multiply it by 8(since there's 8 devices for each line) and the add the device number
     int status;
     
-    //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
     if(IntLineNo==7){ // Check to see if this interrupt is generated from a terminal "sender"
         int transmissionStatus=*((int*)(devAddr+0x8)); //Reads the transmission status register using the offset of 0x8
@@ -132,29 +133,28 @@ void deviceInterruptHandler(int excCode){
         else{ // The interrupts comes from the reciever
             status=*((int*)(devAddr+0x0)); // Reads the reciever status
             *((int*)(devAddr+0x4))=ACK; 
-            semaphoreIdx+=DEVPERINT; //Offsets the semaphore to the recieving semaphore index
+            semaphoreIdx+=DEVPERINT; // Offsets the semaphore to the recieving semaphore index
         }
     }
 
-    // Remove first process waiting for that semaphore
+    // Remove first process waiting for that semaphore, we are performing a sem.V()
     int* deviceSem=&device_semaphores[semaphoreIdx];
+    // (*deviceSem)++; //---------------------DEVO INCREMENTARE IL VALORE DEL SEMAFORO?
     pcb_t * unblockedPcb=removeBlocked(deviceSem);
 
     if(unblockedPcb){
-        unblockedPcb->p_s.gpr[10]=status; // gpr[10] maps the a0 register that is used for syscall return values
+        unblockedPcb->p_s.gpr[24]=status;// gpr[24] maps the a0 register that is used for syscall return values
         insertProcQ(&readyQueue, unblockedPcb);
         softBlock_count--;
 
         // Saves the currProc state and puts him in the queue since there is another process(the unblocked one) who should be starting as we call the scheduler with dispatch()
         if(currProc){
-            state_t * excState=getCurrExceptionState();
-            currProc->p_s=*excState;
-            insertProcQ(&readyQueue,currProc);
+            LDST(getCurrExceptionState());
         }
-        
-        
-        dispatch();
-        //LDST(getCurrExceptionState());
+        else{
+            dispatch();
+        }
+                
     }
 
 }
@@ -163,10 +163,7 @@ void deviceInterruptHandler(int excCode){
 void interruptHandler(){
     state_t * excState=getCurrExceptionState();
     int excCause=excState->cause;
-    //int excCode=excCause & CAUSE_EXCCODE_MASK; What in the actual fuck is this constant!? 
-    //int exCCode=(excCause & GETEXECCODE) >> CAUSESHIFT;
-    int excCode = (excState->cause & 0x7FFFFFFF); // Done by Gemini, because how can I know what the value of a const is if nobody tells me
-    
+    int excCode=excCause & CAUSE_EXCCODE_MASK;  // 0x7FFFFFFF
     
     if(excCode==IL_CPUTIMER){
         //Process Local Timer
