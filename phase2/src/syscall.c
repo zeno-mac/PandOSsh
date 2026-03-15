@@ -5,9 +5,14 @@
 #include "../../headers/const.h"
 #include "../../headers/listx.h"
 
-#include <uriscv/liburiscv.h>
+#include <uriscv>
 #include "../../phase1/headers/pcb.h"
 #include "../../phase1/headers/asl.h"
+
+
+/* Istante TOD in cui il processo corrente ha iniziato il suo quanto.
+ * Viene impostato in dispatch() ogni volta che un processo viene eseguito. */
+extern cpu_t tod_start;
 
 extern struct list_head readyQueue;
 
@@ -94,8 +99,8 @@ static pcb_t *findPcbByPid(int pid) {
   //cerca nella ready Queue 
   struct list_head *pos;
   list_for_each(pos, &readyQueue) {
-    pcb_t *pcb    = container_of(pos, pcb_t, p_list);
-    pcb_t *found = searchInTree(pcb, pid);
+    pcb_t *p    = container_of(pos, pcb_t, p_list);
+    pcb_t *found = searchInTree(p, pid);
     if (found != NULL) return found;
   }
   //cerca tra processi in stato waiting (tramite semafori in asl)
@@ -139,8 +144,8 @@ int nsys1(int a1, int a2, int a3){
     new_pcb->p_s = *newState;
     new_pcb->p_prio = prio;
     new_pcb->p_supportStruct = supportp;
-    new_pcb->p_next = insertProcQ(&readyQueue,new_pcb);
-    new_pcb->p_child = insertChild(currProc, new_pcb);
+    insertProcQ(&readyQueue,new_pcb);
+    insertChild(currProc, new_pcb);
     processCount++;
     new_pcb->p_time = 0;
     new_pcb->p_semAdd = NULL;
@@ -157,7 +162,7 @@ void nsys2(int a1, state_t * excState) {
     termPcb = currProc;
   }
   else {
-    termPcb = findPcbByPid(Pid);
+    termPcb = findPcbByPid(a1);
     if(termPcb == NULL) {
       excState->reg_a0 = NOPROC;
       LDST(excState);
@@ -168,6 +173,186 @@ void nsys2(int a1, state_t * excState) {
   terminateProcess(termPcb);
   dispatch();
 }
+
+
+
+
+
+void nsys3(int a1, state_t * excState) {
+  int* semAdd = (int *)a1;
+  if (*semAdd > 0) {
+    (*semAdd)--;
+    LDST(excState);
+  }  
+  else {
+
+    currProc->p_s = *excState;
+
+    cpu_t currentTime;
+    STCK(currentTime);
+    currProc->p_time += (currentTime - tod_start);
+    insertBlocked(semAdd, currProc);
+    
+    currProc = NULL;
+    dispatch();
+  }
+  return;
+}
+
+
+void nsys4(int a1, state_t * excState) {
+    int *semAdd = (int *)a1;
+    pcb_t *unblocked = removeBlocked(semAdd);
+
+    if (unblocked != NULL) {
+        insertProcQ(&readyQueue, unblocked);
+    } else {
+        (*semAdd)++;
+  return;
+}
+
+
+
+void nsys5 (int a1, int a2, state_t * excState) {
+  
+
+    /* Azzera gli ultimi 4 bit per ottenere la base del device register */
+    int devRegBase = a1 & 0xFFFFFFF0;
+
+    /* Offset dall'inizio dell'area device register */
+    int offset = devRegBase - START_DEVREG;
+
+    /* Indice di linea (0=DISK, 1=FLASH, 2=ETH, 3=PRINTER, 4=TERMINAL) */
+    int lineIndex = offset / 0x80;
+
+    /* Numero del device sulla linea (0..7) */
+    int devNo = (offset % 0x80) / 0x10;
+
+    /* Indice base nel array device_semaphores */
+    int semIndex = lineIndex * DEVPERINT + devNo;
+
+    /* Per i terminali (lineIndex == 4) distingui recv da transm:
+     * TRANSM_COMMAND è a offset 0xC dalla base del device register,
+     * RECV_COMMAND è a offset 0x4.
+     * Se a1 - devRegBase == 0xC → trasmissione → semaforo nella
+     * seconda metà dell'area terminali */
+    if (lineIndex == 4) {
+        int subDevOffset = a1 - devRegBase;
+        if (subDevOffset == 0xC) {
+            /* Trasmissione: usa il semaforo con offset DEVPERINT */
+            semIndex += DEVPERINT;
+        }
+        /* Ricezione: semIndex rimane invariato */
+    }
+
+    int *semAdd = &device_semaphores[semIndex];
+
+    /* --- 2. Scrivi il comando nel registro del dispositivo --- */
+    /* Questo avvia fisicamente l'operazione I/O */
+    *((int *)a1) = a2;
+
+    /* --- 3. Salva lo stato corrente nel PCB --- */
+    currProc->p_s = *excState;
+
+    /* --- 4. Aggiorna il tempo accumulato --- */
+    cpu_t currentTime;
+    STCK(currentTime);
+    currProc->p_time += (currentTime - tod_start);
+
+    /* --- 5. Incrementa softBlock_count ---
+     * Questo processo è ora bloccato in attesa di I/O */
+    softBlock_count++;
+
+    /* --- 6. Blocca il processo sul semaforo del dispositivo --- */
+    insertBlocked(semAdd, currProc);
+
+    /* --- 7. Nessun processo in esecuzione --- */
+    currProc = NULL;
+
+    /* --- 8. Chiama lo scheduler --- */
+    dispatch();
+
+    return;
+}
+
+
+
+
+void nsys6 (state_t * excState) {
+  cpu_t currentTime;
+  STCK(currentTime);
+
+  excState->reg_a0 = currProc->p_time + (currentTime - tod_start);
+}
+
+
+void nsys7 (state_t * excState) {
+      /* Il semaforo pseudo-clock è sempre l'ultimo dell'array */
+    int *pseudoClockSem = &device_semaphores[NSUPPSEM];
+
+    /* 1. Salva lo stato corrente nel PCB */
+    currProc->p_s = *excState;
+
+    /* 2. Aggiorna il tempo accumulato */
+    cpu_t currentTime;
+    STCK(currentTime);
+    currProc->p_time += (currentTime - tod_start);
+
+    /* 3. Incrementa softBlock_count:
+     * questo processo è bloccato in attesa di un evento timer,
+     * non di un semaforo utente */
+    softBlock_count++;
+
+    /* 4. Blocca il processo sul semaforo pseudo-clock */
+    insertBlocked(pseudoClockSem, currProc);
+
+    /* 5. Nessun processo in esecuzione */
+    currProc = NULL;
+
+    /* 6. Chiama lo scheduler */
+    dispatch();
+
+    return;
+}
+
+
+
+void nsys8 (state_t * excState) {
+  excState->reg_a0 = (int)currProc->p_supportStruct;
+  return;
+}
+
+
+
+void nsys9 (int a1, state_t * excState) {
+  if (a1 == 0) {
+    excState->reg_a0 = currProc->p_pid;
+  }
+  else {
+    if (currProc->p_parent == NULL)  excState->reg_a0 = 0;
+    else excState->reg_a0 = currProc->p_parent->p_pid;
+  }
+}
+
+
+
+void nsys10(state_t *excState) {
+
+    currProc->p_s = *excState;
+
+    cpu_t currentTime;
+    STCK(currentTime);
+    currProc->p_time += (currentTime - tod_start);
+
+    insertProcQ(&readyQueue, currProc);
+
+    currProc = NULL;
+
+    dispatch();
+
+    return;
+}
+
 
 
 

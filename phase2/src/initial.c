@@ -8,6 +8,8 @@
 #include <uriscv/liburiscv.h>
 #include "../headers/scheduler.h"
 
+cpu_t tod_start;
+
 struct list_head readyQueue; // List of processed ready to be execute
 int processCount = 0; // Counter indicating the number of started, but not yet terminated processes
 int softBlock_count = 0; // Counter indicating the number of process blocked

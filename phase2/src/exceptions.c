@@ -5,7 +5,7 @@
 #include "../../headers/types.h"
 #include "../../headers/const.h"
 #include "../../headers/listx.h"
-#include <uriscv/liburiscv.h>
+#include <uriscv>
 
 #include "../../phase1/headers/pcb.h"
 #include "../../phase1/headers/asl.h"
@@ -25,22 +25,58 @@ void uTLB_RefillHandler() {
 void exceptionHandler() {
   state_t * excState = getCurrExceptionState();
   int excCode = excState->cause;
+
   if (CAUSE_IS_INT(excCode)) {
     interruptHandler();
     return; 
   }
-  //anche switch (expression) {
-  //}
-  if (excCode>=24 && excCode<=28){
+  int excCodeMask = excCode & CAUSE_EXCCODE_MASK;
+  if (excCodeMask>=24 && excCodeMask<=28){
     tlbHandler();
   }
-  else if (excCode == 8 || excCode == 11){
+  else if (excCodeMask == 8 || excCodeMask == 11){
     syscallHandler();
   }
   else {
     trapHandler();
   }
 
+}
+
+
+static void passUpOrDie(int exceptionType) {
+
+  if (currProc->p_supportStruct == NULL) {
+    /* Die: termina il processo corrente e tutti i suoi figli */
+    nsys2(0, (state_t*) BIOSDATAPAGE);
+    /* nsys2 chiama dispatch() internamente, non torna mai qui */
+  } else {
+    /* Pass Up */
+
+    /* 1. Copia lo stato salvato nel campo corretto del support */
+    currProc->p_supportStruct->sup_exceptState[exceptionType] = *((state_t*) BIOSDATAPAGE);
+
+    /* 2. Recupera il contesto del Support Level handler */
+    context_t *ctx = &(currProc->p_supportStruct->sup_exceptContext[exceptionType]);
+
+    /* 3. Passa il controllo al Support Level handler.
+    * LDCXT carica atomicamente SP, status e PC — non ritorna mai */
+    LDCXT(ctx->stackPtr, ctx->status, ctx->pc);
+  }
+
+  return;
+}
+
+
+
+void tlbHandler(){
+  passUpOrDie(PGFAULTEXCEPT);
+  return;
+}
+
+void trapHandler(){
+  passUpOrDie(GENERALEXCEPT);
+  return;
 }
 
 
@@ -52,8 +88,9 @@ void syscallHandler() {
   int a2 = excState->reg_a2;
   int a3 = excState->reg_a3;
   
-  if(a0_numSys < 0 && (MSTATUS_MPP_MASK & excState->status == MSTATUS_MPP_U)) {
-    //interrupt
+  if(a0_numSys < 0 && (MSTATUS_MPP_MASK & excState->status) == MSTATUS_MPP_U) {
+    excState->cause = (excState->cause & CLEAREXECCODE) | (PRIVINSTR << CAUSESHIFT);
+    trapHandler();
     return;
   }
   else{
@@ -65,35 +102,39 @@ void syscallHandler() {
         excState->reg_a0 = nsys1(a1,a2,a3);
         LDST(excState);
         break;
-      case TERMINATEPROCESS:
+      case TERMPROCESS:
         nsys2(a1, excState);
         break;
       case PASSEREN:
-
+        nsys3(a1, excState);
         break;
       case VERHOGEN:
-
+        nsys4(a1,excState);
+        LDST(excState);
         break;
       case DOIO:
-
+        nsys5(a1,a2,excState);
         break;
-      case GETCPUTIME:
-
+      case GETTIME:
+        nsys6(excState);
+        LDST(excState);
         break;
-      case WAITCLOCK:
-
+      case CLOCKWAIT:
+        nsys7(excState);
         break;
       case GETSUPPORTPTR:
-
+        nsys8(excState);
+        LDST(excState);
         break;
       case GETPID:
-
+        nsys9(a1, excState);
+        LDST(excState);
         break;
       case YIELD:
-
+        nsys10(excState);
         break;
-      case default:
-        //PASS UP OR DIE for numSys > 0
+      default:
+        trapHandler();
         break;
     }
       
@@ -108,6 +149,4 @@ void syscallHandler() {
 
 
 
-
-//TLB-Refill Event
 

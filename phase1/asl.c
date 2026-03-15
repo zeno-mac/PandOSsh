@@ -74,8 +74,8 @@ pcb_t* removeBlocked(int* semAdd) {
     return NULL;
 }
 
-/*Remove the PCB pointed to by p from the process queue associated with p’s semaphore (p->p_semAdd)
-on the ASL. If PCB pointed to by p does not appear in the process queue associated with p’s
+/*Remove the PCB pointed to by p from the process queue associated with p's semaphore (p->p_semAdd)
+on the ASL. If PCB pointed to by p does not appear in the process queue associated with p's
 semaphore, which is an error condition, return NULL; otherwise, return p. */
 pcb_t* outBlocked(pcb_t* p) {
     struct semd_t *curr;
