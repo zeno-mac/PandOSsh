@@ -5,7 +5,12 @@
 #include "../../headers/types.h"
 #include "../../headers/const.h"
 #include "../../headers/listx.h"
-#include <uriscv>
+
+//File della libreria uriscv da includere -------------------------
+#include <uriscv/liburiscv.h> 
+#include <uriscv/cpu.h> 
+
+
 
 #include "../../phase1/headers/pcb.h"
 #include "../../phase1/headers/asl.h"
@@ -126,7 +131,7 @@ void syscallHandler() {
         nsys8(excState);
         LDST(excState);
         break;
-      case GETPID:
+      case GETPID: //GETPID dalle spec. sezione 6.9 dovrebbe valere -9. Facendo un $grep di GETPID nella libreria che ha mazzo non c'è niente, forse bisogna usare GETPROCESSID definito in  "../headers/const.h"
         nsys9(a1, excState);
         LDST(excState);
         break;

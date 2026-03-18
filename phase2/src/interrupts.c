@@ -2,7 +2,6 @@
 #include "../../headers/types.h"
 #include <uriscv/liburiscv.h>
 #include <uriscv/cpu.h> //NON AVREBBE SENSO INCLUDERE TUTTO CIO' CHE SI TROVA IN uriscv/ ?????????????????????????
-#include <uriscv/liburiscv.h>
 #include "../../phase1/headers/pcb.h"
 #include "../../phase1/headers/asl.h"
 #include "../headers/initial.h"
