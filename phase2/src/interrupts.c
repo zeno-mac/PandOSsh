@@ -63,7 +63,16 @@ void itInterruptHandler(){
     //Returning the control to the curr proc. if that exists. Identical to the pltInterruptHandler
     if(currProc){
         state_t *excState=getCurrExceptionState(); // Loading the state on the current proc.
-        currProc->p_s=*excState;
+        //currProc->p_s=*excState; da errori di memcpy
+        currProc->p_s.entry_hi=excState->entry_hi;
+        currProc->p_s.cause=excState->cause;
+        currProc->p_s.mie=excState->mie;
+        currProc->p_s.pc_epc=excState->pc_epc;
+        currProc->p_s.status=excState->status;
+        for(int i=0;i<STATE_GPR_LEN;i++)
+            currProc->p_s.gpr[i]=excState->gpr[i];
+
+
         insertProcQ(&readyQueue, currProc);        
     }
 
@@ -138,7 +147,7 @@ void deviceInterruptHandler(int excCode){
 
     // Remove first process waiting for that semaphore, we are performing a sem.V()
     int* deviceSem=&device_semaphores[semaphoreIdx];
-    // (*deviceSem)++; //---------------------DEVO INCREMENTARE IL VALORE DEL SEMAFORO?
+    
     pcb_t * unblockedPcb=removeBlocked(deviceSem);
 
     if(unblockedPcb){
@@ -154,6 +163,9 @@ void deviceInterruptHandler(int excCode){
             dispatch();
         }
                 
+    }
+    else{
+        (*deviceSem)++; // Increase the semaphore value if there were no process waiting 
     }
 
 }
