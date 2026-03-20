@@ -1,9 +1,9 @@
-void uTLB_RefillHandler(){};
+void uTLB_RefillHandler();
 
 
 
-void exceptionHandler(){};
+void exceptionHandler();
 
 
-void syscallHandler(){};
+void syscallHandler();
 

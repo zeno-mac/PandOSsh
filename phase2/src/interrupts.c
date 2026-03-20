@@ -6,6 +6,7 @@
 #include "../../phase1/headers/asl.h"
 #include "../headers/initial.h"
 #include "../headers/scheduler.h"
+#include "../headers/interrupts.h"
 
 //----------------------TO AVOID MEMCPY ERRORS-------------------- gli errori memory avvengono perché per copiare uno state in un pcb non basta fare p_s:=state perché p_s ha piu campi e cosi non vengono copiatoi tutti
 void *memcpy(void *dest, const void *src, unsigned int n) {
