@@ -5,7 +5,9 @@
 #include "../../headers/const.h"
 #include "../../headers/listx.h"
 
-#include <uriscv>
+#include <uriscv/liburiscv.h>
+#include <uriscv/cpu.h>
+
 #include "../../phase1/headers/pcb.h"
 #include "../../phase1/headers/asl.h"
 
@@ -15,6 +17,12 @@
 extern cpu_t tod_start;
 
 extern struct list_head readyQueue;
+extern int device_semaphores[NRSEMAPHORES]; 
+extern pcb_t* currProc; 
+extern int softBlock_count; 
+extern int processCount; 
+
+extern struct list_head semd_h;
 
 static int isDeviceSemaphore(int *semAdd) {
     return (semAdd >= &device_semaphores[0] &&
@@ -208,6 +216,7 @@ void nsys4(int a1, state_t * excState) {
         insertProcQ(&readyQueue, unblocked);
     } else {
         (*semAdd)++;
+    }
   return;
 }
 
