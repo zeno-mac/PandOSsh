@@ -3,7 +3,7 @@
 
 static semd_t semd_table[MAXPROC];
 static struct list_head semdFree_h; // pointer to the head of free semaphore list 
-static struct list_head semd_h;     // pointer to the head of ASL 
+struct list_head semd_h;     // pointer to the head of ASL 
 
 /*Initialize the semdFree list to contain all the elements of the array static semd_t semdTable[MAXPROC].
 This method will be only called once during data structure initialization. */
