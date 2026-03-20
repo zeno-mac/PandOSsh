@@ -5,6 +5,8 @@
 #include "../../headers/const.h"
 #include "../../headers/listx.h"
 
+#include "../headers/syscall.h"
+
 #include <uriscv/liburiscv.h>
 #include <uriscv/cpu.h>
 

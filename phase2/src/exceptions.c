@@ -17,14 +17,7 @@
 
 extern pcb_t* currProc;
 
-void uTLB_RefillHandler() {
-  int prid = getPRID();
-  setENTRYHI(0x80000000);
-  setENTRYLO(0x00000000);
-  TLBWR();
-  LDST((state_t*) BIOSDATAPAGE);
-}
-
+extern void uTLB_RefillHandler();
 
 
 void exceptionHandler() {
