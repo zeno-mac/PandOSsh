@@ -32,7 +32,7 @@ void dispatch(){
     currProc = pcb;
     setTIMER(TIMESLICE);
 
-    STCK(tod_start);  // salva il TOD di inizio quanto
+    //STCK(tod_start);  // salva il TOD di inizio quanto
   
     LDST(&(pcb->p_s));
 }
