@@ -149,7 +149,7 @@ int nsys1(int a1, int a2, int a3){
   pcb_t *new_pcb = allocPcb();
   if(new_pcb == NULL) return NOPROC; //NOPROC=-1
   else {
-    //new_pcb->p_s = *newState;
+    //new_pcb->p_s = *newState; genera memcpy errors
     new_pcb->p_s.cause = newState->cause;
     new_pcb->p_s.entry_hi = newState->entry_hi;
     new_pcb->p_s.mie = newState->mie;
@@ -203,7 +203,14 @@ void nsys3(int a1, state_t * excState) {
   }  
   else {
 
-    currProc->p_s = *excState;
+    //currProc->p_s = *excState; errori memcpy
+    currProc->p_s.entry_hi=excState->entry_hi;
+    currProc->p_s.cause=excState->cause;
+    currProc->p_s.mie=excState->mie;
+    currProc->p_s.pc_epc=excState->pc_epc;
+    currProc->p_s.status=excState->status;
+    for(int i=0;i<STATE_GPR_LEN;i++)
+      currProc->p_s.gpr[i]=excState->gpr[i];
 
     cpu_t currentTime;
     STCK(currentTime);
@@ -270,7 +277,16 @@ void nsys5 (int a1, int a2, state_t * excState) {
     *((int *)a1) = a2;
 
     /* --- 3. Salva lo stato corrente nel PCB --- */
-    currProc->p_s = *excState;
+    //currProc->p_s = *excState;
+    currProc->p_s.entry_hi=excState->entry_hi;
+    currProc->p_s.cause=excState->cause;
+    currProc->p_s.mie=excState->mie;
+    currProc->p_s.pc_epc=excState->pc_epc;
+    currProc->p_s.status=excState->status;
+    for(int i=0;i<STATE_GPR_LEN;i++)
+      currProc->p_s.gpr[i]=excState->gpr[i];
+
+
 
     /* --- 4. Aggiorna il tempo accumulato --- */
     cpu_t currentTime;
@@ -309,8 +325,16 @@ void nsys7 (state_t * excState) {
     int *pseudoClockSem = &device_semaphores[NSUPPSEM];
 
     /* 1. Salva lo stato corrente nel PCB */
-    currProc->p_s = *excState;
+    //currProc->p_s = *excState;
+    currProc->p_s.entry_hi=excState->entry_hi;
+    currProc->p_s.cause=excState->cause;
+    currProc->p_s.mie=excState->mie;
+    currProc->p_s.pc_epc=excState->pc_epc;
+    currProc->p_s.status=excState->status;
+    for(int i=0;i<STATE_GPR_LEN;i++)
+      currProc->p_s.gpr[i]=excState->gpr[i];
 
+      
     /* 2. Aggiorna il tempo accumulato */
     cpu_t currentTime;
     STCK(currentTime);
@@ -356,7 +380,15 @@ void nsys9 (int a1, state_t * excState) {
 
 void nsys10(state_t *excState) {
 
-    currProc->p_s = *excState;
+    //currProc->p_s = *excState; genera errori memcpy
+    currProc->p_s.entry_hi=excState->entry_hi;
+    currProc->p_s.cause=excState->cause;
+    currProc->p_s.mie=excState->mie;
+    currProc->p_s.pc_epc=excState->pc_epc;
+    currProc->p_s.status=excState->status;
+    for(int i=0;i<STATE_GPR_LEN;i++)
+      currProc->p_s.gpr[i]=excState->gpr[i];
+
 
     cpu_t currentTime;
     STCK(currentTime);
