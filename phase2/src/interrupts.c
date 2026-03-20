@@ -7,7 +7,7 @@
 #include "../headers/initial.h"
 #include "../headers/scheduler.h"
 
-//----------------------TO AVOID MEMCPY ERRORS--------------------
+//----------------------TO AVOID MEMCPY ERRORS-------------------- gli errori memory avvengono perché per copiare uno state in un pcb non basta fare p_s:=state perché p_s ha piu campi e cosi non vengono copiatoi tutti
 void *memcpy(void *dest, const void *src, unsigned int n) {
     char *d = dest;
     const char *s = src;
