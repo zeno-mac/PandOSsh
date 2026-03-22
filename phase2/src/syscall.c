@@ -92,41 +92,6 @@ static pcb_t *searchInTree(pcb_t *root, int pid) {
   }
   return NULL;
 }
-
-/*
- * findPcbByPid
- * Cerca il PCB con il dato pid in tutte le strutture del sistema:
- *   1. Albero radicato nel processo corrente (running)
- *   2. Alberi radicati nei processi nella ready queue
- * Restituisce il puntatore al PCB trovato, oppure NULL.
- * Usata da NSYS2 quando pid != 0.
- */
-static pcb_t *findPcbByPid(int pid) {
-
-  // cerca tra i figli del processo corrente
-  if (currProc != NULL) {
-    pcb_t *found = searchInTree(currProc, pid);
-    if (found != NULL)
-      return found;
-  }
-
-  // cerca nella ready Queue
-  struct list_head *pos;
-  list_for_each(pos, &readyQueue) {
-    pcb_t *p = container_of(pos, pcb_t, p_list);
-    pcb_t *found = searchInTree(p, pid);
-    if (found != NULL)
-      return found;
-  }
-  // cerca tra processi in stato waiting (tramite semafori in asl)
-  // searchBlockedByPid(pid);
-
-  return NULL;
-}
-
-//-------------------------------------------------------------------
-// da aggiungere in asl.c
-// in asl.c - ha accesso a semd_h che è privata
 pcb_t *searchBlockedByPid(int pid) {
   semd_t *sem;
   list_for_each_entry(sem, &semd_h, s_link) {
@@ -139,6 +104,41 @@ pcb_t *searchBlockedByPid(int pid) {
   }
   return NULL;
 }
+
+/*
+ * findPcbByPid
+ * Cerca il PCB con il dato pid in tutte le strutture del sistema:
+ *   1. Albero radicato nel processo corrente (running)
+ *   2. Alberi radicati nei processi nella ready queue
+ * Restituisce il puntatore al PCB trovato, oppure NULL.
+ * Usata da NSYS2 quando pid != 0.
+ */
+static pcb_t *findPcbByPid(int pid) {
+
+  /* cerca tra i figli del processo corrente */
+  if (currProc != NULL) {
+    pcb_t *found = searchInTree(currProc, pid);
+    if (found != NULL)
+      return found;
+  }
+
+  /* cerca nella ready queue */
+  struct list_head *pos;
+  list_for_each(pos, &readyQueue) {
+    pcb_t *p = container_of(pos, pcb_t, p_list);
+    pcb_t *found = searchInTree(p, pid);
+    if (found != NULL)
+      return found;
+  }
+
+  /* cerca tra i processi bloccati nell'ASL */
+  pcb_t *found = searchBlockedByPid(pid);
+  if (found != NULL)
+    return found;
+
+  return NULL;
+}
+
 //------------------------------------------------------------------
 
 int nsys1(int a1, int a2, int a3) {
