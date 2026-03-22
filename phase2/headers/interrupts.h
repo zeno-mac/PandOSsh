@@ -1,3 +1,7 @@
+#include "../../headers/types.h"
+
+state_t *getCurrExceptionState();
+
 /* Handles only processor's local timer interrupts*/
 void pltInterruptHandler();
 
@@ -7,6 +11,6 @@ void itInterruptHandler();
 /* Handles all the interrupts that aren't generated through timers*/
 void deviceInterruptHandler();
 
-
-/* Main function, used to handle interrupt exceptions which calls the previously declared functions*/
+/* Main function, used to handle interrupt exceptions which calls the previously
+ * declared functions*/
 void interruptHandler();
