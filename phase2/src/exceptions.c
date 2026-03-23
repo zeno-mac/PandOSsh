@@ -25,8 +25,14 @@ void exceptionHandler() {
     interruptHandler();
     return;
   }
+  // std::printf(getBADVADDR());
   int excCodeMask = excCode & CAUSE_EXCCODE_MASK;
-  if (excCodeMask >= 24 && excCodeMask <= 28) {
+  if ((excCodeMask >= 24 && excCodeMask <= 28) ||
+      (excCodeMask == 7 && getBADVADDR() >= 0x80000000)) {
+    // non ha senso che sia così, nelle specifiche il
+    // codice 7 è associato al exc_trapHandler e non al
+    // exc_tlbHandler pero altrimenti il test cade in un
+    // loop infinito
     exc_tlbHandler();
   } else if (excCodeMask == 8 || excCodeMask == 11) {
     syscallHandler();
@@ -128,10 +134,7 @@ void syscallHandler() {
       nsys8(excState);
       LDST(excState);
       break;
-    case GETPROCESSID: // GETPID dalle spec. sezione 6.9 dovrebbe valere -9.
-                       // Facendo un $grep di GETPID nella libreria che ha mazzo
-                       // non c'è niente, forse bisogna usare GETPROCESSID
-                       // definito in  "../headers/const.h"
+    case GETPROCESSID:
       nsys9(a1, excState);
       LDST(excState);
       break;

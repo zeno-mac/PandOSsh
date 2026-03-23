@@ -512,7 +512,7 @@ void p5gen() {
   switch (exeCode) {
   // store access fault
   case BUSERROR:
-    print("Bus Error (as expected): Access non-existent memory\n");
+    print("this------>Bus Error (as expected): Access non-existent memory\n");
     pFiveSupport.sup_exceptState[GENERALEXCEPT].pc_epc =
         (memaddr)p5a; /* Continue with p5a() */
     break;
