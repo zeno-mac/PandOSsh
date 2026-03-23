@@ -79,8 +79,7 @@ int sem_term_mut = 1, /* for mutual exclusion on terminal */
     sem_endp8 = 0,    /* to signal demise of p8 */
     sem_endcreate[NOLEAVES] = {0}, /* for a p8 leaf to signal its creation */
     sem_blkp8 = 0,                 /* to block p8 */
-    sem_blkp9 = 0,                 /* to block p9 */
-    sem_testbinary = 0;            /* to test binary semaphores */
+    sem_blkp9 = 0;                 /* to block p9 */
 
 state_t p2state, p3state, p4state, p5state, p6state, p7state, p8rootstate,
     child1state, child2state, gchild1state, gchild2state, gchild3state,
@@ -142,14 +141,6 @@ void uTLB_RefillHandler() {
 /*                 p1 -- the root process                            */
 /*                                                                   */
 void test() {
-
-  /*
-  //~~~~~~~~~~~~~~~~~~~~~~Temporary test for initial.c, scheduler.c and
-  interrupts.c~~~~~~~~~~~~~~~~~~~~~~ while(1) {
-      // Just spin to consume time and trigger the PLT
-  }
-  */
-
   SYSCALL(VERHOGEN, (int)&sem_testsem, 0, 0); /* V(sem_testsem)   */
   SYSCALL(VERHOGEN, (int)&sem_testsem, 0, 0);
   SYSCALL(VERHOGEN, (int)&sem_testsem, 0, 0);
@@ -521,7 +512,7 @@ void p5gen() {
   switch (exeCode) {
   // store access fault
   case BUSERROR:
-    print("this---->Bus Error (as expected): Access non-existent memory\n");
+    print("Bus Error (as expected): Access non-existent memory\n");
     pFiveSupport.sup_exceptState[GENERALEXCEPT].pc_epc =
         (memaddr)p5a; /* Continue with p5a() */
     break;
@@ -715,14 +706,12 @@ void child2() {
 /*p8leaf -- code for leaf processes*/
 
 void p8leaf1() {
-  SYSCALL(VERHOGEN, (int)&sem_testbinary, 0, 0);
   print("leaf process (1) starts\n");
   SYSCALL(VERHOGEN, (int)&sem_endcreate[0], 0, 0);
   SYSCALL(PASSEREN, (int)&sem_blkp8, 0, 0);
 }
 
 void p8leaf2() {
-  SYSCALL(VERHOGEN, (int)&sem_testbinary, 0, 0);
   print("leaf process (2) starts\n");
   SYSCALL(VERHOGEN, (int)&sem_endcreate[1], 0, 0);
   SYSCALL(PASSEREN, (int)&sem_blkp8, 0, 0);
@@ -731,12 +720,6 @@ void p8leaf2() {
 void p8leaf3() {
   print("leaf process (3) starts\n");
   SYSCALL(VERHOGEN, (int)&sem_endcreate[2], 0, 0);
-  if (sem_testbinary != 1) {
-    print("Error: binary semaphore value is not 1!\n");
-    PANIC();
-  }
-  SYSCALL(PASSEREN, (int)&sem_testbinary, 0, 0);
-  SYSCALL(PASSEREN, (int)&sem_testbinary, 0, 0);
   SYSCALL(PASSEREN, (int)&sem_blkp8, 0, 0);
 }
 
