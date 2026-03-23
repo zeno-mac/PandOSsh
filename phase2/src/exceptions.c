@@ -39,27 +39,37 @@ static void passUpOrDie(int exceptionType) {
 
   if (currProc->p_supportStruct == NULL) {
     /* Die: termina il processo corrente e tutti i suoi figli */
-    nsys2(0, (state_t *)BIOSDATAPAGE);
+    nsys2(0, getCurrExceptionState());
     /* nsys2 chiama dispatch() internamente, non torna mai qui */
   } else {
     /* Pass Up */
+    state_t *excState = getCurrExceptionState();
 
-    /* 1. Copia lo stato salvato nel campo corretto del support */
-    currProc->p_supportStruct->sup_exceptState[exceptionType] =
-        *((state_t *)BIOSDATAPAGE);
+    /* 1. Copia lo stato salvato nel campo corretto del support (Campo per
+     * Campo!) */
+    currProc->p_supportStruct->sup_exceptState[exceptionType].entry_hi =
+        excState->entry_hi;
+    currProc->p_supportStruct->sup_exceptState[exceptionType].cause =
+        excState->cause;
+    currProc->p_supportStruct->sup_exceptState[exceptionType].status =
+        excState->status;
+    currProc->p_supportStruct->sup_exceptState[exceptionType].pc_epc =
+        excState->pc_epc;
+    currProc->p_supportStruct->sup_exceptState[exceptionType].mie =
+        excState->mie;
+    for (int i = 0; i < STATE_GPR_LEN; i++) {
+      currProc->p_supportStruct->sup_exceptState[exceptionType].gpr[i] =
+          excState->gpr[i];
+    }
 
     /* 2. Recupera il contesto del Support Level handler */
     context_t *ctx =
         &(currProc->p_supportStruct->sup_exceptContext[exceptionType]);
 
-    /* 3. Passa il controllo al Support Level handler.
-     * LDCXT carica atomicamente SP, status e PC — non ritorna mai */
+    /* 3. Passa il controllo al Support Level handler. */
     LDCXT(ctx->stackPtr, ctx->status, ctx->pc);
   }
-
-  return;
 }
-
 void exc_tlbHandler() {
   passUpOrDie(PGFAULTEXCEPT);
   return;
