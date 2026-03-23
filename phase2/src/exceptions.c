@@ -94,7 +94,10 @@ void syscallHandler() {
     return;
   } else {
 
-    excState->pc_epc += WORDLEN;
+    /* Incrementa il PC SOLO per le syscall kernel valide (da -1 a  -10) */
+    if (a0_numSys >= -10 && a0_numSys <= -1) {
+      excState->pc_epc += WORDLEN;
+    }
 
     switch (a0_numSys) {
     case CREATEPROCESS:
