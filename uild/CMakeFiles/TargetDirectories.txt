@@ -1,0 +1,4 @@
+/home/matteomazzetti/Desktop/uni/progettoSO/PandOSsh/uild/CMakeFiles/MultiPandOS.dir
+/home/matteomazzetti/Desktop/uni/progettoSO/PandOSsh/uild/CMakeFiles/MultiPandOSuRISCV.dir
+/home/matteomazzetti/Desktop/uni/progettoSO/PandOSsh/uild/CMakeFiles/edit_cache.dir
+/home/matteomazzetti/Desktop/uni/progettoSO/PandOSsh/uild/CMakeFiles/rebuild_cache.dir

@@ -195,7 +195,6 @@ void nsys3(int a1, state_t *excState) {
     LDST(excState);
   } else {
 
-    // currProc->p_s = *excState; errori memcpy
     currProc->p_s.entry_hi = excState->entry_hi;
     currProc->p_s.cause = excState->cause;
     currProc->p_s.mie = excState->mie;
@@ -265,7 +264,6 @@ void nsys5(int a1, int a2, state_t *excState) {
   *((int *)a1) = a2;
 
   /* --- 3. Salva lo stato corrente nel PCB --- */
-  // currProc->p_s = *excState;
   currProc->p_s.entry_hi = excState->entry_hi;
   currProc->p_s.cause = excState->cause;
   currProc->p_s.mie = excState->mie;
@@ -307,7 +305,6 @@ void nsys7(state_t *excState) {
   int *pseudoClockSem = &device_semaphores[NSUPPSEM];
 
   /* 1. Salva lo stato corrente nel PCB */
-  // currProc->p_s = *excState;
   currProc->p_s.entry_hi = excState->entry_hi;
   currProc->p_s.cause = excState->cause;
   currProc->p_s.mie = excState->mie;
@@ -356,7 +353,6 @@ void nsys9(int a1, state_t *excState) {
 
 void nsys10(state_t *excState) {
 
-  // currProc->p_s = *excState; genera errori memcpy
   currProc->p_s.entry_hi = excState->entry_hi;
   currProc->p_s.cause = excState->cause;
   currProc->p_s.mie = excState->mie;

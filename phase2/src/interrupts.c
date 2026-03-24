@@ -8,17 +8,6 @@
 #include <uriscv/cpu.h> //NON AVREBBE SENSO INCLUDERE TUTTO CIO' CHE SI TROVA IN uriscv/ ?????????????????????????
 #include <uriscv/liburiscv.h>
 
-//----------------------TO AVOID MEMCPY ERRORS-------------------- gli errori
-// memory avvengono perché per copiare uno state in un pcb non basta fare
-// p_s:=state perché p_s ha piu campi e cosi non vengono copiatoi tutti
-void *memcpy(void *dest, const void *src, unsigned int n) {
-  char *d = dest;
-  const char *s = src;
-  while (n--) {
-    *d++ = *s++;
-  }
-  return dest;
-}
 
 // Import global vars from initial.c
 extern struct list_head readyQueue;
@@ -39,9 +28,7 @@ void pltInterruptHandler() {
   currProc->p_time += (currentTime - tod_start);
 
   if (currProc) {
-    state_t *excState = getCurrExceptionState(); // Copy the processor state at
-                                                 // the time of the interrupt
-    // currProc->p_s = *excState; errori memcpy
+    state_t *excState = getCurrExceptionState(); // Copy the processor state at the time of the interrupt
     currProc->p_s.entry_hi = excState->entry_hi;
     currProc->p_s.cause = excState->cause;
     currProc->p_s.mie = excState->mie;
@@ -58,8 +45,7 @@ void pltInterruptHandler() {
 }
 
 void itInterruptHandler() {
-  LDIT(PSECOND); // Acknowledging the interrupt by loading the Interval Timer
-                 // with 100ms.
+  LDIT(PSECOND); // Acknowledging the interrupt by loading the Interval Timer with 100ms.
 
   int *pseudoClockSem = &device_semaphores[NSUPPSEM]; // Get the last semaphore
   pcb_t *unblockedPcb;
@@ -72,12 +58,11 @@ void itInterruptHandler() {
 
   *pseudoClockSem = 0;
 
-  // Returning the control to the curr proc. if that exists. Identical to the
-  // pltInterruptHandler
+  // Returning the control to the curr proc. if that exists. Identical to the pltInterruptHandler
   if (currProc) {
     state_t *excState =
         getCurrExceptionState(); // Loading the state on the current proc.
-    // currProc->p_s=*excState; da errori di memcpy
+  
     currProc->p_s.entry_hi = excState->entry_hi;
     currProc->p_s.cause = excState->cause;
     currProc->p_s.mie = excState->mie;
@@ -128,8 +113,7 @@ void deviceInterruptHandler(int excCode) {
       0x10000040 +
       ((IntLineNo - 3) *
        WORDLEN); // startingAddress+(normilized line of 2nd table)*lengthOfWord
-  int bitmap = *((int *)mapAddr); // Saves in bitmap the value of the map
-                                  // pointed by the address
+  int bitmap = *((int *)mapAddr); // Saves in bitmap the value of the map pointed by the address
 
   // Let's find which device actually triggered the interrupt
   if (bitmap & DEV0ON)
@@ -152,49 +136,37 @@ void deviceInterruptHandler(int excCode) {
   if (DevNo == -999)
     return;
 
-  int devAddr = START_DEVREG + ((IntLineNo - 3) * 0x80) +
-                (DevNo * 0x10); // startingAddress+(lineOffset)+(deviceOffset)
-  int semaphoreIdx =
-      (IntLineNo - 3) * DEVPERINT +
-      DevNo; // To switch from matrix form to array you get the deviceLine and
-             // multiply it by 8(since there's 8 devices for each line) and the
-             // add the device number
+  int devAddr = START_DEVREG + ((IntLineNo - 3) * 0x80) + (DevNo * 0x10); // startingAddress+(lineOffset)+(deviceOffset)
+  int semaphoreIdx = (IntLineNo - 3) * DEVPERINT + DevNo; 
+  // To switch from matrix form to array you get the deviceLine and multiply it by 8(since there's 8 devices for each line) and the add the device number
   int status;
 
-  if (IntLineNo == 7) { // Check to see if this interrupt is generated from a
-                        // terminal "sender"
+  if (IntLineNo == 7) { // Check to see if this interrupt is generated from a terminal "sender"
     int transmissionStatus =
-        *((int *)(devAddr + 0x8)); // Reads the transmission status register
-                                   // using the offset of 0x8
+        *((int *)(devAddr + 0x8)); // Reads the transmission status register using the offset of 0x8
     if ((transmissionStatus & 0xFF) !=
-        0) { // If the transimmion register contains a value, hence the
-             // transmission is completed
+        0) { // If the transimmion register contains a value, hence the transmission is completed
       status = transmissionStatus;
-      *((int *)(devAddr + 0xC)) =
-          ACK; // Acknowledges the end of this transmission
+      *((int *)(devAddr + 0xC)) = ACK; // Acknowledges the end of this transmission
     } else {   // The interrupts comes from the reciever
       status = *((int *)(devAddr + 0x0)); // Reads the reciever status
       *((int *)(devAddr + 0x4)) = ACK;
-      semaphoreIdx +=
-          DEVPERINT; // Offsets the semaphore to the recieving semaphore index
+      semaphoreIdx += DEVPERINT; // Offsets the semaphore to the recieving semaphore index
     }
   }
 
-  // Remove first process waiting for that semaphore, we are performing a
-  // sem.V()
+  // Remove first process waiting for that semaphore, we are performing a sem.V()
   int *deviceSem = &device_semaphores[semaphoreIdx];
 
   pcb_t *unblockedPcb = removeBlocked(deviceSem);
 
   if (unblockedPcb) {
-    unblockedPcb->p_s.gpr[24] = status; // gpr[24] maps the a0 register that is
-                                        // used for syscall return values
+    unblockedPcb->p_s.gpr[24] = status; // gpr[24] maps the a0 register that is  used for syscall return values
     insertProcQ(&readyQueue, unblockedPcb);
     softBlock_count--;
 
-    // Saves the currProc state and puts him in the queue since there is another
-    // process(the unblocked one) who should be starting as we call the
-    // scheduler with dispatch()
+    // Saves the currProc state and puts him in the queue since there is another process
+    //(the unblocked one) who should be starting as we call the scheduler with dispatch()
     if (currProc) {
       LDST(getCurrExceptionState());
     } else {
@@ -202,15 +174,14 @@ void deviceInterruptHandler(int excCode) {
     }
 
   } else {
-    (*deviceSem)++; // Increase the semaphore value if there were no process
-                    // waiting
+    (*deviceSem)++; // Increase the semaphore value if there were no process waiting
   }
 }
 
 void interruptHandler() {
   state_t *excState = getCurrExceptionState();
   int excCause = excState->cause;
-  int excCode = excCause & CAUSE_EXCCODE_MASK; // 0x7FFFFFFF
+  int excCode = excCause & CAUSE_EXCCODE_MASK; 
 
   if (excCode == IL_CPUTIMER) {
     // Process Local Timer
