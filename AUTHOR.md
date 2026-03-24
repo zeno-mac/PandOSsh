@@ -1,4 +1,4 @@
-# PandOSsh Phase 1 Authors
+# PandOSsh Phase 1,2 Authors
 
 - Luca Argentino 0001161779 luca.argentino@studio.unibo.it
 - Milo Disalvatore 0001160361 milo.disalvatore@studio.unibo.it
