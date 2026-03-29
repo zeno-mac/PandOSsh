@@ -1,6 +1,6 @@
 void exceptionHandler();
 
-static void passUpOrDie(int);
+void passUpOrDie(int);
 
 void exc_tlbHandler();
 

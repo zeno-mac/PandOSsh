@@ -13,13 +13,13 @@ add_link_options(-nostdlib -T ${URISCV_SRC}/uriscvcore.ldscript -march=rv32imfd)
 add_compile_options(-ffreestanding -static -nostartfiles -nostdlib -I${URISCV_INC} -ggdb -Wall -O0 -std=gnu99 -march=rv32imafd -mabi=ilp32d)
 
 add_executable(MultiPandOS
-    ./klog.c phase1/pcb.c phase1/asl.c 
-	phase2/src/initial.c phase2/src/exceptions.c phase2/src/interrupts.c phase2/src/scheduler.c phase2/src/p2test.c phase2/src/syscall.c
+    ./klog.c phase1/pcb.c phase1/asl.c
+ phase2/src/initial.c phase2/src/exceptions.c phase2/src/interrupts.c phase2/src/scheduler.c phase2/src/p2test.c phase2/src/syscall.c phase2/src/aux.c
     ${URISCV_SRC}/crtso.S ${URISCV_SRC}/liburiscv.S)
 
 add_custom_target(
-	MultiPandOSuRISCV ALL
-	COMMAND uriscv-elf2uriscv -k ${PROJECT_BINARY_DIR}/MultiPandOS
-	BYPRODUCTS MultiPandOS.core.uriscv MultiPandOS.stab.uriscv
-	DEPENDS MultiPandOS
+ MultiPandOSuRISCV ALL
+ COMMAND uriscv-elf2uriscv -k ${PROJECT_BINARY_DIR}/MultiPandOS
+ BYPRODUCTS MultiPandOS.core.uriscv MultiPandOS.stab.uriscv
+ DEPENDS MultiPandOS
 )

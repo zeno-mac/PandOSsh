@@ -13,8 +13,7 @@
 #include "../../phase1/headers/asl.h"
 #include "../../phase1/headers/pcb.h"
 
-/* Istante TOD in cui il processo corrente ha iniziato il suo quanto.
- * Viene impostato in dispatch() ogni volta che un processo viene eseguito. */
+#include "../headers/aux.h"
 extern cpu_t tod_start;
 
 extern struct list_head readyQueue;
@@ -25,57 +24,58 @@ extern int processCount;
 
 extern struct list_head semd_h;
 
+/*
+ * Returns true if the given semaphore address belongs to the Nucleus-maintained
+ * device semaphore array (including the pseudo-clock semaphore at index
+ * NSUPPSEM). Used by terminateProcess to decide whether to decrement
+ * softBlock_count.
+ */
 static int isDeviceSemaphore(int *semAdd) {
   return (semAdd >= &device_semaphores[0] &&
           semAdd <= &device_semaphores[NRSEMAPHORES - 1]);
 }
 
+/*
+ * Recursively terminates the process pointed to by p and all of its progeny.
+ * For each process:
+ *   - If running (p == currProc): set currProc to NULL.
+ *   - If blocked on a semaphore (p->p_semAdd != NULL): remove from ASL,
+ *     decrement softBlock_count if it was waiting on a device/clock semaphore.
+ *   - If ready (in the ready queue): remove from the queue.
+ * Then detaches p from its parent's child list, decrements processCount,
+ * and frees the PCB.
+ */
 static void terminateProcess(pcb_t *p) {
   if (p == NULL)
     return;
 
-  /*
-   * Termina ricorsivamente tutti i figli prima di terminare p.
-   * Usiamo removeChild() in loop perche' terminateProcess() modifica
-   * la lista p_child durante la ricorsione.
-   */
   while (!emptyChild(p)) {
     terminateProcess(removeChild(p));
   }
 
-  /* Rimuovi p dalla struttura in cui si trova attualmente */
   if (p == currProc) {
-    /* Processo in esecuzione: non e' in nessuna lista */
     currProc = NULL;
 
   } else if (p->p_semAdd != NULL) {
-    /* Processo bloccato su un semaforo nell'ASL */
     outBlocked(p);
 
-    /*
-     * Decrementa softBlock_count solo se il semaforo e' uno dei
-     * semafori device o pseudo-clock (non un semaforo utente).
-     */
     if (isDeviceSemaphore(p->p_semAdd)) {
-      softBlock_count--; // in attesa di io o di un clock
+      softBlock_count--;
     }
 
   } else {
-    /* Processo pronto: si trova nella ready queue */
     outProcQ(&readyQueue, p);
   }
 
-  /* Stacca p dall'albero del padre (se ne ha ancora uno) */
   outChild(p);
-
   processCount--;
   freePcb(p);
 }
 
 /*
- * searchInTree
- * Cerca ricorsivamente il PCB con il dato pid nell'albero radicato in root.
- * Restituisce il puntatore al PCB trovato, oppure NULL.
+ * Recursively searches the process subtree rooted at 'root' for a process
+ * with the given pid.
+ * Returns a pointer to the matching PCB, or NULL if not found.
  */
 static pcb_t *searchInTree(pcb_t *root, int pid) {
   if (root == NULL)
@@ -92,6 +92,12 @@ static pcb_t *searchInTree(pcb_t *root, int pid) {
   }
   return NULL;
 }
+
+/*
+ * Searches all semaphore queues in the Active Semaphore List (ASL)
+ * for a process with the given pid.
+ * Returns a pointer to the matching PCB, or NULL if not found.
+ */
 pcb_t *searchBlockedByPid(int pid) {
   semd_t *sem;
   list_for_each_entry(sem, &semd_h, s_link) {
@@ -106,23 +112,24 @@ pcb_t *searchBlockedByPid(int pid) {
 }
 
 /*
- * findPcbByPid
- * Cerca il PCB con il dato pid in tutte le strutture del sistema:
- *   1. Albero radicato nel processo corrente (running)
- *   2. Alberi radicati nei processi nella ready queue
- * Restituisce il puntatore al PCB trovato, oppure NULL.
- * Usata da NSYS2 quando pid != 0.
+ * Searches for a PCB with the given pid across all process structures:
+ *   1. The subtree rooted at the current running process (currProc)
+ *   2. The subtrees rooted at each process in the ready queue
+ *   3. All processes blocked on semaphores in the ASL
+ *
+ * Returns a pointer to the found PCB, or NULL if not found.
+ * Used by nsys2 when pid != 0.
  */
 static pcb_t *findPcbByPid(int pid) {
 
-  /* cerca tra i figli del processo corrente */
+  /* Search in the subtree of the currently running process */
   if (currProc != NULL) {
     pcb_t *found = searchInTree(currProc, pid);
     if (found != NULL)
       return found;
   }
 
-  /* cerca nella ready queue */
+  /* Search in the subtrees of all ready processes */
   struct list_head *pos;
   list_for_each(pos, &readyQueue) {
     pcb_t *p = container_of(pos, pcb_t, p_list);
@@ -131,7 +138,7 @@ static pcb_t *findPcbByPid(int pid) {
       return found;
   }
 
-  /* cerca tra i processi bloccati nell'ASL */
+  /* Search among all blocked processes in the ASL */
   pcb_t *found = searchBlockedByPid(pid);
   if (found != NULL)
     return found;
@@ -139,8 +146,16 @@ static pcb_t *findPcbByPid(int pid) {
   return NULL;
 }
 
-//------------------------------------------------------------------
-
+/*
+ * NSYS1 — CreateProcess
+ *
+ * Creates a new child process of the current process.
+ *
+ * The new PCB is initialized, inserted into the ready queue, and made
+ * a child of currProc. processCount is incremented.
+ *
+ * Returns: the PID of the new process, or NOPROC (-1) if no PCB is available.
+ */
 int nsys1(int a1, int a2, int a3) {
   state_t *newState = (state_t *)a1;
   int prio = a2;
@@ -148,20 +163,22 @@ int nsys1(int a1, int a2, int a3) {
 
   pcb_t *new_pcb = allocPcb();
   if (new_pcb == NULL)
-    return NOPROC; // NOPROC=-1
+    return NOPROC;
   else {
-    // new_pcb->p_s = *newState; genera memcpy errors
-    new_pcb->p_s.cause = newState->cause;
-    new_pcb->p_s.entry_hi = newState->entry_hi;
-    new_pcb->p_s.mie = newState->mie;
-    new_pcb->p_s.pc_epc = newState->pc_epc;
-    new_pcb->p_s.status = newState->status;
-    for (int i = 0; i < STATE_GPR_LEN; i++)
-      new_pcb->p_s.gpr[i] = newState->gpr[i];
+    copyState(&new_pcb->p_s, newState);
+    // new_pcb->p_s.cause = newState->cause;
+    // ew_pcb->p_s.entry_hi = newState->entry_hi;
+    // new_pcb->p_s.mie = newState->mie;
+    // new_pcb->p_s.pc_epc = newState->pc_epc;
+    // new_pcb->p_s.status = newState->status;
+    // for (int i = 0; i < STATE_GPR_LEN; i++)
+    //   new_pcb->p_s.gpr[i] = newState->gpr[i];
 
     new_pcb->p_prio = prio;
     new_pcb->p_supportStruct = supportp;
+    // Insert into the ready queue (ordered by priority)
     insertProcQ(&readyQueue, new_pcb);
+    // Make the new process a child of the current process
     insertChild(currProc, new_pcb);
     processCount++;
     new_pcb->p_time = 0;
@@ -170,6 +187,15 @@ int nsys1(int a1, int a2, int a3) {
   }
 }
 
+/*
+ * NSYS2 — TerminateProcess
+ *
+ * Terminates a process and all of its progeny recursively.
+ *   a1: PID of the process to terminate, or 0 to terminate currProc
+ *
+ * If a1 != 0 and the process is not found, returns NOPROC in a0.
+ * After termination, calls dispatch() to schedule the next process.
+ */
 void nsys2(int a1, state_t *excState) {
   pcb_t *termPcb = NULL;
 
@@ -188,13 +214,29 @@ void nsys2(int a1, state_t *excState) {
   dispatch();
 }
 
+/*
+ * NSYS3 — Passeren (P operation)
+ *
+ * Performs a P (wait) operation on the semaphore at address a1.
+ *   a1: physical address of the semaphore
+ *
+ * If *semAdd > 0: decrement the semaphore and return to the caller.
+ * Otherwise: save the process state, update p_time, block the process
+ * on the ASL, and call dispatch().
+ */
 void nsys3(int a1, state_t *excState) {
   int *semAdd = (int *)a1;
   if (*semAdd > 0) {
+    // Semaphore available: decrement and continue execution
     (*semAdd)--;
     LDST(excState);
   } else {
-
+    /*
+     * Semaphore not available: block the current process.
+     * Save the updated processor state (PC already incremented) into the PCB.
+     */
+    copyState(&currProc->p_s, excState);
+    /*
     currProc->p_s.entry_hi = excState->entry_hi;
     currProc->p_s.cause = excState->cause;
     currProc->p_s.mie = excState->mie;
@@ -202,7 +244,7 @@ void nsys3(int a1, state_t *excState) {
     currProc->p_s.status = excState->status;
     for (int i = 0; i < STATE_GPR_LEN; i++)
       currProc->p_s.gpr[i] = excState->gpr[i];
-
+*/
     cpu_t currentTime;
     STCK(currentTime);
     currProc->p_time += (currentTime - tod_start);
@@ -214,6 +256,19 @@ void nsys3(int a1, state_t *excState) {
   return;
 }
 
+/*
+ * NSYS4 — Verhogen (V operation)
+ *
+ * Performs a V (signal) operation on the semaphore at address a1.
+ *   a1: physical address of the semaphore
+ *
+ * If a process is blocked on the semaphore: unblock it and insert it
+ * into the ready queue (does NOT increment softBlock_count — that was
+ * not incremented by NSYS3 for user semaphores).
+ * Otherwise: increment the semaphore value.
+ *
+ * The V operation never blocks the calling process.
+ */
 void nsys4(int a1, state_t *excState) {
   int *semAdd = (int *)a1;
   pcb_t *unblocked = removeBlocked(semAdd);
@@ -226,73 +281,86 @@ void nsys4(int a1, state_t *excState) {
   return;
 }
 
+/*
+ * NSYS5 — DoIO
+ *
+ * Initiates a synchronous I/O operation and blocks the current process
+ * until the device interrupt signals completion.
+ *   a1: physical address of the device's command register
+ *   a2: command value to write to the command register
+ *
+ * Steps:
+ *   1. Compute the semaphore index from the command register address.
+ *   2. Write the command to the device register (starts the I/O).
+ *   3. Save the process state into the PCB.
+ *   4. Update accumulated CPU time.
+ *   5. Increment softBlock_count (process is waiting for I/O).
+ *   6. Block the process on the device semaphore.
+ *   7. Call dispatch().
+ *
+ * The device interrupt handler (in interrupts.c) will unblock this
+ * process and place the device status in reg_a0 when I/O completes.
+ */
 void nsys5(int a1, int a2, state_t *excState) {
-
-  /* Azzera gli ultimi 4 bit per ottenere la base del device register */
+  /*
+   * Compute the base address of the device register by zeroing
+   * the last 4 bits (device registers are aligned to 0x10 bytes).
+   */
   int devRegBase = a1 & 0xFFFFFFF0;
-
-  /* Offset dall'inizio dell'area device register */
+  // Compute offset from the start of the device register area
   int offset = devRegBase - START_DEVREG;
-
-  /* Indice di linea (0=DISK, 1=FLASH, 2=ETH, 3=PRINTER, 4=TERMINAL) */
+  // Line index: 0=DISK, 1=FLASH, 2=ETH, 3=PRINTER, 4=TERMINAL
   int lineIndex = offset / 0x80;
-
-  /* Numero del device sulla linea (0..7) */
+  /* Device number within the line (0..7) */
   int devNo = (offset % 0x80) / 0x10;
-
-  /* Indice base nel array device_semaphores */
+  // Base semaphore index in device_semaphores[]
   int semIndex = lineIndex * DEVPERINT + devNo;
-
-  /* Per i terminali (lineIndex == 4) distingui recv da transm:
-   * TRANSM_COMMAND è a offset 0xC dalla base del device register,
-   * RECV_COMMAND è a offset 0x4.
-   * Se a1 - devRegBase == 0xC → trasmissione → semaforo nella
-   * seconda metà dell'area terminali */
+  /*
+   * For terminal devices (lineIndex == 4), distinguish between
+   * receiver (RECV_COMMAND at offset 0x4) and transmitter
+   * (TRANSM_COMMAND at offset 0xC). Transmission semaphores are
+   * stored in the second half of the terminal semaphore range.
+   */
   if (lineIndex == 4) {
     int subDevOffset = a1 - devRegBase;
     if (subDevOffset == 0xC) {
-      /* Trasmissione: usa il semaforo con offset DEVPERINT */
       semIndex += DEVPERINT;
     }
-    /* Ricezione: semIndex rimane invariato */
   }
 
   int *semAdd = &device_semaphores[semIndex];
 
-  /* --- 2. Scrivi il comando nel registro del dispositivo --- */
-  /* Questo avvia fisicamente l'operazione I/O */
   *((int *)a1) = a2;
-
-  /* --- 3. Salva lo stato corrente nel PCB --- */
-  currProc->p_s.entry_hi = excState->entry_hi;
-  currProc->p_s.cause = excState->cause;
-  currProc->p_s.mie = excState->mie;
-  currProc->p_s.pc_epc = excState->pc_epc;
-  currProc->p_s.status = excState->status;
-  for (int i = 0; i < STATE_GPR_LEN; i++)
-    currProc->p_s.gpr[i] = excState->gpr[i];
-
-  /* --- 4. Aggiorna il tempo accumulato --- */
+  copyState(&currProc->p_s, excState);
+  /*
+    currProc->p_s.entry_hi = excState->entry_hi;
+    currProc->p_s.cause = excState->cause;
+    currProc->p_s.mie = excState->mie;
+    currProc->p_s.pc_epc = excState->pc_epc;
+    currProc->p_s.status = excState->status;
+    for (int i = 0; i < STATE_GPR_LEN; i++)
+      currProc->p_s.gpr[i] = excState->gpr[i];
+  */
   cpu_t currentTime;
   STCK(currentTime);
   currProc->p_time += (currentTime - tod_start);
 
-  /* --- 5. Incrementa softBlock_count ---
-   * Questo processo è ora bloccato in attesa di I/O */
   softBlock_count++;
 
-  /* --- 6. Blocca il processo sul semaforo del dispositivo --- */
   insertBlocked(semAdd, currProc);
 
-  /* --- 7. Nessun processo in esecuzione --- */
   currProc = NULL;
-
-  /* --- 8. Chiama lo scheduler --- */
   dispatch();
 
   return;
 }
 
+/*
+ * NSYS6 — GetCPUTime
+ *
+ * Returns the total accumulated CPU time used by the current process,
+ * including time elapsed during the current time quantum.
+ */
 void nsys6(state_t *excState) {
   cpu_t currentTime;
   STCK(currentTime);
@@ -300,46 +368,55 @@ void nsys6(state_t *excState) {
   excState->reg_a0 = currProc->p_time + (currentTime - tod_start);
 }
 
+/*
+ * NSYS7 — WaitForClock
+ *
+ * Blocks the current process until the next pseudo-clock tick.
+ * The pseudo-clock semaphore (device_semaphores[NSUPPSEM]) is V'ed
+ * by the Interval Timer interrupt handler every 100 milliseconds.
+ */
 void nsys7(state_t *excState) {
-  /* Il semaforo pseudo-clock è sempre l'ultimo dell'array */
   int *pseudoClockSem = &device_semaphores[NSUPPSEM];
-
-  /* 1. Salva lo stato corrente nel PCB */
-  currProc->p_s.entry_hi = excState->entry_hi;
-  currProc->p_s.cause = excState->cause;
-  currProc->p_s.mie = excState->mie;
-  currProc->p_s.pc_epc = excState->pc_epc;
-  currProc->p_s.status = excState->status;
-  for (int i = 0; i < STATE_GPR_LEN; i++)
-    currProc->p_s.gpr[i] = excState->gpr[i];
-
-  /* 2. Aggiorna il tempo accumulato */
+  copyState(&currProc->p_s, excState);
+  /*
+    currProc->p_s.entry_hi = excState->entry_hi;
+    currProc->p_s.cause = excState->cause;
+    currProc->p_s.mie = excState->mie;
+    currProc->p_s.pc_epc = excState->pc_epc;
+    currProc->p_s.status = excState->status;
+    for (int i = 0; i < STATE_GPR_LEN; i++)
+      currProc->p_s.gpr[i] = excState->gpr[i];
+  */
   cpu_t currentTime;
   STCK(currentTime);
   currProc->p_time += (currentTime - tod_start);
 
-  /* 3. Incrementa softBlock_count:
-   * questo processo è bloccato in attesa di un evento timer,
-   * non di un semaforo utente */
   softBlock_count++;
-
-  /* 4. Blocca il processo sul semaforo pseudo-clock */
   insertBlocked(pseudoClockSem, currProc);
 
-  /* 5. Nessun processo in esecuzione */
   currProc = NULL;
-
-  /* 6. Chiama lo scheduler */
   dispatch();
-
   return;
 }
 
+/*
+ * NSYS8 — GetSupportPtr
+ *
+ * Returns a pointer to the current process's Support Structure.
+ * If no Support Structure was assigned at creation time, returns NULL.
+ */
 void nsys8(state_t *excState) {
   excState->reg_a0 = (int)currProc->p_supportStruct;
   return;
 }
 
+/*
+ * NSYS9 — GetProcessID
+ *
+ * Returns the PID of the current process or its parent.
+ *   a1 == 0: return PID of the current process
+ *   a1 != 0: return PID of the parent process (0 if no parent)
+ */
 void nsys9(int a1, state_t *excState) {
   if (a1 == 0) {
     excState->reg_a0 = currProc->p_pid;
@@ -351,16 +428,24 @@ void nsys9(int a1, state_t *excState) {
   }
 }
 
+/*
+ * NSYS10 — Yield
+ *
+ * Causes the current process to voluntarily relinquish the CPU.
+ * The process is re-inserted into the ready queue
+ * and dispatch() is called to schedule the next process.
+ */
 void nsys10(state_t *excState) {
-
-  currProc->p_s.entry_hi = excState->entry_hi;
-  currProc->p_s.cause = excState->cause;
-  currProc->p_s.mie = excState->mie;
-  currProc->p_s.pc_epc = excState->pc_epc;
-  currProc->p_s.status = excState->status;
-  for (int i = 0; i < STATE_GPR_LEN; i++)
-    currProc->p_s.gpr[i] = excState->gpr[i];
-
+  copyState(&currProc->p_s, excState);
+  /*
+    currProc->p_s.entry_hi = excState->entry_hi;
+    currProc->p_s.cause = excState->cause;
+    currProc->p_s.mie = excState->mie;
+    currProc->p_s.pc_epc = excState->pc_epc;
+    currProc->p_s.status = excState->status;
+    for (int i = 0; i < STATE_GPR_LEN; i++)
+      currProc->p_s.gpr[i] = excState->gpr[i];
+  */
   cpu_t currentTime;
   STCK(currentTime);
   currProc->p_time += (currentTime - tod_start);
@@ -368,8 +453,6 @@ void nsys10(state_t *excState) {
   insertProcQ(&readyQueue, currProc);
 
   currProc = NULL;
-
   dispatch();
-
   return;
 }
