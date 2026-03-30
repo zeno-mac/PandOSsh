@@ -50,8 +50,7 @@ void itInterruptHandler() {
   int *pseudoClockSem = &device_semaphores[NSUPPSEM]; // Get the last semaphore
   pcb_t *unblockedPcb;
 
-  while ((unblockedPcb = removeBlocked(
-              pseudoClockSem))) { // Unlock all the procs waiting for a tick
+  while ((unblockedPcb = removeBlocked(pseudoClockSem))) { // Unlock all the procs waiting for a tick
     insertProcQ(&readyQueue, unblockedPcb);
     softBlock_count--;
   }
