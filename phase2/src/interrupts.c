@@ -108,10 +108,7 @@ void deviceInterruptHandler(int excCode) {
     return;
   }
 
-  int mapAddr =
-      0x10000040 +
-      ((IntLineNo - 3) *
-       WORDLEN); // startingAddress+(normilized line of 2nd table)*lengthOfWord
+  int mapAddr = 0x10000040 + ((IntLineNo - 3) * WORDLEN); // startingAddress+(normilized line of 2nd table)*lengthOfWord
   int bitmap = *((int *)mapAddr); // Saves in bitmap the value of the map pointed by the address
 
   // Let's find which device actually triggered the interrupt
