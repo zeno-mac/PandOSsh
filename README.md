@@ -56,7 +56,7 @@ The data structures for this file are:
 
 # PandOSsh Phase 2
 
-You can find <b> Phase 2 </b> implementation in the directory named <b>phase2/</b>. Let's shortly take a look on the content of said folder.
+You can find <b> Phase 2 </b> implementation in the directory named <b>phase2/</b>. Let's shortly take a look at the content of said folder.
 
 ## Initialization
 
