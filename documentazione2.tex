@@ -1,0 +1,157 @@
+\documentclass[a4paper,12pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[italian]{babel}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage[margin=3cm]{geometry}
+
+\title{Documentazione Progetto Sistemi Operativi: PandOSsh Fase 2}
+\author{Luca Argentino, Milo Disalvatore, Matteo Mazzetti, Zeno Maccari}
+\begin{document}
+
+\maketitle
+
+\section{Inizializzazione (initial.c)}
+...
+
+\vspace{0.5cm}
+\subsection{Strutture Dati Globali}
+Le variabili globali definite nel modulo sono:
+\begin{itemize}
+    \item ...
+\end{itemize}
+
+\vspace{0.5cm}
+\subsection{Descrizione delle Funzioni}
+
+\subsubsection{\texttt{pcb\_t* allocFirstPcb()}}
+...
+
+\subsubsection{\texttt{void initVector()}}
+...
+
+\subsubsection{\texttt{int main()}}
+...
+
+\section{Scheduler (scheduler.c)}
+...
+
+\vspace{0.5cm}
+\subsection{Descrizione delle Funzioni}
+
+\subsubsection{\texttt{void dispatch()}}
+...
+
+\section{Gestione Interrupt (interrupts.c)}
+Il modulo \texttt{interrupts.c} gestisce le eccezioni di interrupt sia dei timer (Processor Local Timer e Interval Timer) sia dei dispositivi hardware. I dispositivi gestiti sono Disk devices, Flash devices, Network devices, Printer devices e Terminal devices(che possono essere di tipo transmitter o reciever).
+
+\vspace{0.5cm}
+\subsection{Descrizione delle Funzioni}
+
+\subsubsection{\texttt{void pltInterruptHandler()}}
+\begin{enumerate}
+    \item Aumenta il PLT (timer locale del processore) di un quanto di 5ms.
+    \item Aggiorna il tempo di utilizzo del processore del processo corrente \texttt{currProc}.
+    \item Memorizza lo stato attuale del processore all'istante esatto in cui è avvenuto un interrupt e lo memorizza nel campo \texttt{p\_s} del PCB del processo attuale.
+    \item Inserisce il processo interrotto nella \texttt{readyQueue}.
+    \item Invoca la funzione \texttt{dispatch()} dello scheduler. 
+\end{enumerate}
+
+\subsubsection{\texttt{void itInterruptHandler()}}
+\begin{enumerate}
+    \item Ricarica l'Interval Timer con un nuovo time slice pari a 100ms.
+    \item Rilascia tutti i processi in attesa di un tick di timer e li inserisce nella \texttt{readyQueue}, diminuendo in numero di processi soft-bloccati (in attesa di eseguire un operazione I/O).
+    \item Resetta il valore dell'ultimo semaforo.
+    \item Salva lo stato attuale del processore nel momento in cui è avvenuto un interrupt e lo memorizza nel campo \texttt{p\_s} del PCB del processo attuale.
+    \item Richiama l'unica procedura dello scheduler: \texttt{dispatch()}. 
+\end{enumerate}
+
+\subsubsection{\texttt{void deviceInterruptHandler(int excCode)}}
+\begin{enumerate}
+    \item Mappa l'\texttt{excCode} che ottiene dal parametro a una delle righe corrispondenti agli interrupt hardware che possono essere: \begin{itemize}
+        \item Line 3: Disk
+        \item Line 4: Flash
+        \item Line 5: Ethernet
+        \item Line 6: Printer
+        \item Line 7: Terminal
+    \end{itemize} 
+    \item Calcola l'indirizzo di memoria del device che genera l'interrupt ed esegue operazioni bit a bit per determinare quale dei vari device elencati sopra ha effettivamente generato l'interrupt.
+    \item Calcola l'indirizzo fisico di memoria dei registri di tale device in \texttt{devAddr} e ottiene l'indice del semaforo corrispondente.
+    \item Controlla se l'interrupt è generato da un terminale e in tal caso verifica se esso è di tipo transmitter o reciever, leggendo di conseguenza l'appropriato registro di stato.
+    \item Esegue un operazione di tipo Verhoog sul semaforo di quel device: sbloccando il primo processo in attesa o facendo sì, se la coda è vuota, che il prossimo non si blocchi. Se un prcesso era in attesa di questo I/O: \begin{itemize}
+        \item Memorizziamo il codice di stato di quel processo nel registro \texttt{a0} che corrisponde a \texttt{p\_s->gpr[24]}.
+        \item Decrementa il \texttt{softBlock\_count}, ossia il contatore dei processi che aspettano un'I/O.
+        \item Restituisce il controllo al processo interrotto
+    \end{itemize}
+    Altrimenti viene richiamato lo scheduler.
+\end{enumerate}
+
+\subsubsection{\texttt{void interruptHandler()}}
+\begin{enumerate}
+    \item Esegue un \texttt{AND} bitwise tra l'\texttt{excState} e un'apposita maschera e determina la tipologia dell'interrupt.
+    \item  Se era associato al Processor Local Timer richiama \texttt{pltInterruptHandler()}.
+    \item Se era associato all'Interval Timer invoca \texttt{itInterruptHandler()}.
+    \item Se invece era associato ad un device passa il controllo a \texttt{deviceInterruptHandler()}.
+\end{enumerate}
+
+\section{Eccezioni (exceptions.c)}
+...
+
+\vspace{0.5cm}
+\subsection{Descrizione delle Funzioni}
+
+\subsubsection{\texttt{void exceptionHandler()}}
+...
+
+\subsubsection{\texttt{void passUpOrDie(int)}}
+...
+
+\subsubsection{\texttt{void exc\_tlbHandler()}}
+...
+
+\subsubsection{\texttt{void exc\_trapHandler()}}
+...
+
+\subsubsection{\texttt{void syscallHandler()}}
+...
+
+\vspace{0.5cm}
+\section{Chiamate di Sistema (syscall.c)}
+...
+
+\vspace{0.5cm}
+\subsection{Descrizione delle Funzioni}
+
+\subsubsection{\texttt{int nsys1(int a1, int a2, int a3)}}
+...
+
+\subsubsection{\texttt{void nsys2(int a1, state\_t *excState)}}
+...
+
+\subsubsection{\texttt{void nsys3(int a1, state\_t *excState)}}
+...
+
+\subsubsection{\texttt{void nsys4(int a1, state\_t *excState)}}
+...
+
+\subsubsection{\texttt{void nsys5(int a1, int a2, state\_t *excState)}}
+...
+
+\subsubsection{\texttt{void nsys6(state\_t *excState)}}
+...
+
+\subsubsection{\texttt{void nsys7(state\_t *excState)}}
+...
+
+\subsubsection{\texttt{void nsys8(state\_t *excState)}}
+...
+
+\subsubsection{\texttt{void nsys9(int a1, state\_t *excState)}}
+...
+
+\subsubsection{\texttt{void nsys10(state\_t *excState)}}
+...
+
+\end{document}
