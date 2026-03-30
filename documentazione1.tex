@@ -1,0 +1,217 @@
+\documentclass[a4paper,12pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[italian]{babel}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage[margin=3cm]{geometry}
+
+\title{Documentazione Progetto Sistemi Operativi: PandOSsh Fase 1}
+\author{Luca Argentino, Milo Disalvatore, Matteo Mazzetti, Zeno Maccari}
+\begin{document}
+
+
+\maketitle
+
+\section{Gestione PCB (pcb.c)}
+Il modulo \texttt{pcb.c} si occupa della gestione dei \textbf{Process Control Blocks (PCB)}, occupandosi della loro allocazione/deallocazione e del mantenimento delle strutture a coda e ad albero.
+
+\vspace{0.5cm}
+\subsection{Strutture Dati Globali}
+Il modulo utilizza le seguenti variabili statiche globali per gestire il pool di PCB:
+
+\begin{itemize}
+    \item \texttt{static pcb\_t pcbFree\_table[MAXPROC]}: Array statico che contiene i PCB disponibili per il sistema.
+    \item \texttt{static struct list\_head pcbFree\_h}: Testa della lista che collega i PCB attualmente non in uso (liberi).
+    \item \texttt{static int next\_pid}: Contatore intero utilizzato per assegnare un Identificatore di Processo (PID) unico a ogni nuovo PCB allocato.
+\end{itemize}
+
+\vspace{0.5cm}
+\subsection{Descrizione delle Funzioni di Allocazione}
+
+\subsubsection{\texttt{void initPcbs()}}
+\begin{enumerate}
+    \item Inizializza la testa della lista dei PCB liberi (\texttt{pcbFree\_h}) tramite la macro \texttt{INIT\_LIST\_HEAD}.
+    \item Itera attraverso l'array statico \texttt{pcbFree\_table} e inserisce ogni elemento nella lista \texttt{pcbFree\_h} utilizzando il campo \texttt{p\_list}.
+\end{enumerate}
+
+\subsubsection{\texttt{void freePcb(pcb\_t *p)}}
+\begin{enumerate}
+    \item Inserisce il PCB puntato da \texttt{p} nella lista dei PCB liberi (\texttt{pcbFree\_h}), rendendolo disponibile per future allocazioni.
+\end{enumerate}
+
+\subsubsection{\texttt{pcb\_t *allocPcb()}}
+\begin{enumerate}
+    \item Controlla se la lista \texttt{pcbFree\_h} è vuota. Se sì, ritorna \texttt{NULL}.
+    \item Se è presente un PCB libero:
+    \begin{itemize}
+        \item Rimuove il primo elemento dalla lista \texttt{pcbFree\_h}.
+        \item Inizializza tutti i campi del PCB a \texttt{NULL} o \texttt{0} (inclusi i puntatori di lista e di stato).
+        \item Assegna al campo \texttt{p\_pid} il valore corrente di \texttt{next\_pid} e incrementa quest'ultimo.
+        \item Ritorna il puntatore al PCB inizializzato.
+    \end{itemize}
+\end{enumerate}
+
+\vspace{0.5cm}
+\subsection{Descrizione delle Funzioni per Code di Processi} %-----PARTE DI MAZZO
+\subsubsection{\texttt{int emptyProcQ(struct list\_head *head)}}
+\begin{enumerate}
+    \item Ritorna \texttt{TRUE} se la lista puntata da \texttt{head} è vuota, \texttt{FALSE} altrimenti.
+\end{enumerate}
+
+\subsubsection{\texttt{void insertProcQ(struct list\_head *head, pcb\_t *p)}}
+\begin{enumerate}
+    \item Memorizza la priorità del PCB puntato da \texttt{p}.
+    \item Scorre tutta la lista associata ad \texttt{head} e confronta le priorità dei PCB che incontra con quella memorizzata.
+    \item Appena incontra un PCB con priorità minore di quella di \texttt{p} inserisce il PCB \texttt{p}.
+\end{enumerate}
+\subsubsection{\texttt{pcb\_t *headProcQ(struct list\_head *head)}}
+\begin{enumerate}
+    \item Controlla se l'elemento sentinella \texttt{head} punta ad una coda nulla e in tal caso ritorna \texttt{NULL}.
+    \item Se così non fosse allora restituisce il primo PCB della lista.
+\end{enumerate}
+
+\subsubsection{\texttt{pcb\_t *removeProcQ(struct list\_head *head)}}
+\begin{enumerate}
+    \item Se \texttt{head} punta ad una coda vuota allora viene ritornato \texttt{NULL}.
+    \item Altrimenti salva temporaneamente il primo PCB per ritornarlo.
+    \item Rimuove il primo PCB.
+    \item Restituisce il PCB appena salvato, ossia quello rimosso. 
+\end{enumerate}
+
+\subsubsection{\texttt{pcb\_t *outProcQ(struct list\_head *head, pcb\_t *p)}}
+\begin{enumerate}
+    \item Scorre tutta la lista puntata da \texttt{head} alla ricerca del PCB di cui \texttt{p} è il puntatore.
+    \begin{itemize}
+        \item Se trova p allora lo rimuove e lo restituisce.
+        \item Se p non è presente nella lista allora ritorna \texttt{NULL}.
+    \end{itemize}
+\end{enumerate}
+
+
+\vspace{0.5cm}
+\subsection{Descrizione delle Funzioni per Alberi di Processi}
+
+\subsubsection{\texttt{int emptyChild(pcb\_t *p)}}
+\begin{enumerate}
+    \item Verifica se il PCB puntato da \texttt{p} ha dei figli controllando se la lista \texttt{p\_child} è vuota.
+    \item Ritorna \texttt{TRUE} se la lista è vuota (o se \texttt{p} è \texttt{NULL}), altrimenti ritorna \texttt{FALSE}.
+\end{enumerate}
+
+\subsubsection{\texttt{void insertChild(pcb\_t *prnt, pcb\_t *p)}}
+\begin{enumerate}
+    \item Se entrambi i puntatori sono validi, imposta \texttt{prnt} come padre del PCB \texttt{p} (campo \texttt{p\_parent}).
+    \item Inserisce il PCB \texttt{p} nella lista dei figli del padre (\texttt{prnt->p\_child}) utilizzando il campo \texttt{p\_sib}.
+\end{enumerate}
+
+\subsubsection{\texttt{pcb\_t *removeChild(pcb\_t *p)}}
+\begin{enumerate}
+    \item Controlla se il PCB \texttt{p} ha figli tramite \texttt{emptyChild}. Se non ne ha, ritorna \texttt{NULL}.
+    \item Altrimenti, individua il primo figlio nella lista \texttt{p\_child}.
+    \item Rimuove tale figlio dalla lista e ne imposta il puntatore al padre (\texttt{p\_parent}) a \texttt{NULL}.
+    \item Ritorna il puntatore al PCB del figlio rimosso.
+\end{enumerate}
+
+\subsubsection{\texttt{pcb\_t *outChild(pcb\_t *p)}}
+\begin{enumerate}
+    \item Verifica se il PCB \texttt{p} ha effettivamente un padre. Se non lo ha, ritorna \texttt{NULL}.
+    \item Rimuove il PCB \texttt{p} dalla lista dei fratelli (e quindi dalla lista dei figli del padre) tramite il campo \texttt{p\_sib}.
+    \item Resetta il puntatore \texttt{p\_parent} a \texttt{NULL}.
+    \item Ritorna il puntatore \texttt{p}.
+\end{enumerate}
+
+
+\section{Gestione Semafori (asl.c)}
+Il modulo \texttt{asl.c} implementa la gestione della \textbf{Active Semaphore List (ASL)}.
+
+La struttura dati ASL è utilizzata per la gestione della lista dei semafori attivi, ovvero quei semafori in cui almeno un PCB è bloccato.
+
+\vspace{0.5cm}
+\subsection{Strutture Dati Globali}
+Il modulo utilizza le seguenti variabili statiche globali per gestire lo stato dei semafori:
+
+\begin{itemize}
+    \item \texttt{static semd\_t semd\_table[MAXPROC]}: Array statico contente i semafori liberi con dimensione massima \texttt{(MAXPROC)}.
+    \item \texttt{static struct list\_head semdFree\_h}: Testa della lista che collega i descrittori di semafori liberi.
+    \item \texttt{static struct list\_head semd\_h}: Testa della lista che rappresenta la ASL che contiene i descrittori dei semafori attivi.
+\end{itemize}
+
+\vspace{0.5cm}
+\subsection{Descrizione delle Funzioni}
+
+\subsubsection{\texttt{void initASL()}}
+\begin{enumerate}
+    \item Inizializza le teste delle liste \texttt{semdFree\_h} e \texttt{semd\_h} utilizzando la macro \texttt{INIT\_LIST\_HEAD}.
+    \item Itera attraverso l'array \texttt{semd\_table} e inserisce ogni elemento nella lista dei descrittori liberi (\texttt{semdFree\_h}) utilizzando il campo \texttt{s\_link}.
+\end{enumerate}
+
+\subsubsection{\texttt{int insertBlocked(int* semAdd, pcb\_t* p)}}
+
+
+\begin{enumerate}
+    \item Scorre la ASL (\texttt{semd\_h}) per cercare un semaforo con chiave uguale a \texttt{semAdd}.
+    \item \textbf{Se il semaforo esiste:}
+    \begin{itemize}
+        \item Inserisce il PCB \texttt{p} in coda alla lista processi del semaforo (\texttt{s\_procq}).
+        \item Aggiorna il puntatore \texttt{p->p\_semAdd} del PCB.
+        \item Ritorna \texttt{FALSE}.
+    \end{itemize}
+    \item \textbf{Se il semaforo non esiste:}
+
+    Controlla se la lista dei liberi \texttt{semdFree\_h} è vuota. Se sì, ritorna \texttt{TRUE}.
+
+    Altrimenti: 
+    \begin{itemize}
+        
+        \item Rimuove il primo semaforo  disponibile dalla \texttt{semdFree\_h}.
+        \item Inizializza il nuovo semaforo: imposta la chiave \texttt{s\_key}, inizializza la coda processi \texttt{s\_procq}.
+        \item Aggiunge il nuovo semaforo in coda alla ASL (\texttt{semd\_h}).
+        \item Aggiunge il PCB \texttt{p} alla coda del nuovo semaforo e aggiorna il riferimento \texttt{p->p\_semAdd}.
+        \item Ritorna \texttt{FALSE}.
+    \end{itemize}
+\end{enumerate}
+
+\subsubsection{\texttt{pcb\_t* removeBlocked(int* semAdd)}}
+
+
+\begin{enumerate}
+    \item Cerca il semaforo con chiave \texttt{semAdd} nella ASL.
+    \item Se non trovato, ritorna \texttt{NULL}.
+    \item Se trovato:
+    \begin{itemize}
+        \item Identifica e rimuove il primo PCB nella coda \texttt{s\_procq}.
+        \item Controlla se la coda processi del semaforo è diventata vuota (\texttt{emptyProcQ}).
+        \begin{itemize}
+            \item Se la coda è vuota, il semaforo viene disattivato: viene rimosso dalla ASL e reinserito nella lista dei liberi 
+        \texttt{semdFree\_h}.
+        \end{itemize}
+        \item Ritorna il puntatore al PCB rimosso.
+    \end{itemize}
+\end{enumerate}
+
+\subsubsection{\texttt{pcb\_t* outBlocked(pcb\_t* p)}}
+
+
+\begin{enumerate}
+    \item Scorre la ASL per trovare il semaforo corrispondente a \texttt{p->p\_semAdd}.
+    \item Una volta trovato il semaforo, scorre la sua coda processi (\texttt{s\_procq}) per trovare il PCB \texttt{p}.
+    \item Se il PCB viene trovato:
+    \begin{itemize}
+        \item Rimuove il PCB dalla lista.
+        \item Verifica se la coda del semaforo è diventata vuota. Se sì, rimuove il descrittore del semaforo dalla ASL e lo restituisce alla lista dei liberi.
+        \item Ritorna il puntatore a \texttt{p}.
+    \end{itemize}
+    \item Se il semaforo non viene trovato o il PCB non è nella coda, ritorna \texttt{NULL}.
+\end{enumerate}
+
+\subsubsection{\texttt{pcb\_t* headBlocked(int* semAdd)}}
+
+
+\begin{enumerate}
+    \item Cerca il semaforo con chiave \texttt{semAdd} nella ASL.
+    \item Se trovato, utilizza la funzione \texttt{headProcQ} (definita in \texttt{pcb.c}) per restituire il primo elemento della coda processi.
+    \item Se il semaforo non esiste, ritorna \texttt{NULL}.
+\end{enumerate}
+
+\end{document}
