@@ -1,4 +1,9 @@
-#include "../headers/aux.h"
+#include "../headers/auxfun.h"
+
+
+#include "../../headers/const.h"    
+#include <uriscv/liburiscv.h>       
+#include <uriscv/cpu.h>
 
 void copyState(state_t *myStruct, state_t *newState) {
   myStruct->cause = newState->cause;
@@ -9,3 +14,7 @@ void copyState(state_t *myStruct, state_t *newState) {
   for (int i = 0; i < STATE_GPR_LEN; i++)
     myStruct->gpr[i] = newState->gpr[i];
 }
+
+
+// Aux function to get the exception state of the curr processor
+state_t *getCurrExceptionState() { return GET_EXCEPTION_STATE_PTR(getPRID()); }

@@ -8,7 +8,7 @@
 #include <uriscv/cpu.h>
 #include <uriscv/liburiscv.h>
 
-#include "../headers/aux.h"
+#include "../headers/auxfun.h"
 
 extern pcb_t *currProc;
 

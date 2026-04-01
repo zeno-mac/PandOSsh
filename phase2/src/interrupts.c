@@ -7,6 +7,7 @@
 #include "../headers/scheduler.h"
 #include <uriscv/cpu.h> //NON AVREBBE SENSO INCLUDERE TUTTO CIO' CHE SI TROVA IN uriscv/ ?????????????????????????
 #include <uriscv/liburiscv.h>
+#include "../headers/auxfun.h"
 
 
 // Import global vars from initial.c
@@ -17,8 +18,6 @@ extern pcb_t *currProc;
 extern int device_semaphores[NRSEMAPHORES];
 extern cpu_t tod_start;
 
-// Aux function to get the exception state of the curr processor
-state_t *getCurrExceptionState() { return GET_EXCEPTION_STATE_PTR(getPRID()); }
 
 void pltInterruptHandler() {
   setTIMER(TIMESLICE); // let 5ms pass on the processor:
@@ -59,17 +58,10 @@ void itInterruptHandler() {
 
   // Returning the control to the curr proc. if that exists. Identical to the pltInterruptHandler
   if (currProc) {
-    state_t *excState =
-        getCurrExceptionState(); // Loading the state on the current proc.
+    state_t *excState = getCurrExceptionState(); // Loading the state on the current proc.
   
-    currProc->p_s.entry_hi = excState->entry_hi;
-    currProc->p_s.cause = excState->cause;
-    currProc->p_s.mie = excState->mie;
-    currProc->p_s.pc_epc = excState->pc_epc;
-    currProc->p_s.status = excState->status;
-    for (int i = 0; i < STATE_GPR_LEN; i++)
-      currProc->p_s.gpr[i] = excState->gpr[i];
-
+    copyState(&currProc->p_s, excState);
+    
     insertProcQ(&readyQueue, currProc);
   }
 

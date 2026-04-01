@@ -13,7 +13,7 @@
 #include "../../phase1/headers/asl.h"
 #include "../../phase1/headers/pcb.h"
 
-#include "../headers/aux.h"
+#include "../headers/auxfun.h"
 extern cpu_t tod_start;
 
 extern struct list_head readyQueue;
