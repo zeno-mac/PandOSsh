@@ -144,7 +144,7 @@ void deviceInterruptHandler(int excCode) {
   int status;
 
   if (IntLineNo == 7) { // Check to see if this interrupt is generated from a terminal "sender"
-    int transmissionStatus = *((int *)(devAddr + 0x80)); // Reads the transmission status register using the offset of 0x8
+    int transmissionStatus = *((int *)(devAddr + 0x8)); // Reads the transmission status register using the offset of 0x8 
     if ((transmissionStatus & 0xFF) !=0) { // If the transimmion register contains a value, hence the transmission is completed
       status = transmissionStatus;
       *((int *)(devAddr + 0xC)) = ACK; // ACKs the end of this transmission
