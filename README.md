@@ -125,8 +125,8 @@ As we already stated, this module ( file <b>syscall.c</b>) contains the implemen
 <li><b>void nsys6(state_t *excState)</b>: using this function we request the accumulated time that a certain process has occupied the CPU;
 <li><b>void nsys7(state_t *excState)</b>: this service let's you perform a semaphore P() on the Nucleus Pseudo-clock semaphore;
 <li><b>void nsys8(state_t *excState)</b>: returns, if possible, the value of the current PCB p_supportStruct;
-<li><b>void nsys9(int a1, state_t *excState)</b>: allows us to use the GetProcessId() function;
-<li><b>void nsys10(state_t *excState)</b>: the process calling this procedure decides to yield, which means to refuse to use the CPU in his current time slice;
+<li><b>void nsys9(int a1, state_t *excState)</b>: return the PID of the current process or of the father if it has one;allows us to use the GetProcessId() function;
+<li><b>void nsys10(state_t *excState)</b>: the process calling this procedure decides to yield, which means to release the use of the CPU in his current time slice;
 </ul>
 
 # Compiling and running
