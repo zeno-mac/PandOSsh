@@ -97,61 +97,127 @@ Il modulo \texttt{interrupts.c} gestisce le eccezioni di interrupt sia dei timer
 \end{enumerate}
 
 \section{Eccezioni (exceptions.c)}
-...
+Il modulo \texttt{exceptions.c} rappresenta il punto di ingresso per tutte le eccezioni (esclusi gli eventi di TLB-Refill) e si occupa di smistarle ai gestori appropriati. Implementa inoltre il meccanismo di "Pass Up or Die" per la gestione delle eccezioni a livello di supporto.
 
 \vspace{0.5cm}
 \subsection{Descrizione delle Funzioni}
 
 \subsubsection{\texttt{void exceptionHandler()}}
-...
+\begin{enumerate}
+    \item Ottiene lo stato del processore al momento dell'eccezione tramite \texttt{getCurrExceptionState()} e ne estrae il codice (\texttt{cause}).
+    \item Verifica se l'eccezione è un interrupt (controllando il bit 31 del registro \texttt{cause}). In tal caso, passa il controllo a \texttt{interruptHandler()} e termina.
+    \item Se non è un interrupt, applica una maschera al codice dell'eccezione per determinarne la natura:
+    \begin{itemize}
+        \item Se il codice è compreso tra 24 e 28, invoca \texttt{exc\_tlbHandler()}.
+        \item Se il codice è 8 o 11 (SYSCALL), invoca \texttt{syscallHandler()}.
+        \item In tutti gli altri casi (Program Trap), invoca \texttt{exc\_trapHandler()}.
+    \end{itemize}
+\end{enumerate}
 
-\subsubsection{\texttt{void passUpOrDie(int)}}
-...
+\subsubsection{\texttt{void passUpOrDie(int exceptionType)}}
+\begin{enumerate}
+    \item Verifica se il processo corrente possiede una struttura di supporto (\texttt{p\_supportStruct == NULL}).
+    \item \textbf{Die}: Se la struttura non è presente, il processo corrente e tutta la sua progenie vengono terminati richiamando \texttt{nsys2(0, excState)}.
+    \item \textbf{Pass Up}: Se la struttura è presente, lo stato dell'eccezione salvato viene copiato nell'apposito campo \texttt{sup\_exceptState} della struttura di supporto.
+    \item Recupera il contesto del livello di supporto.
+    \item Trasferisce il controllo al gestore del livello di supporto tramite l'istruzione \texttt{LDCXT}.
+\end{enumerate}
 
 \subsubsection{\texttt{void exc\_tlbHandler()}}
-...
+\begin{enumerate}
+    \item Gestisce le eccezioni del TLB richiamando semplicemente la funzione \texttt{passUpOrDie()} passandole come parametro la costante \texttt{PGFAULTEXCEPT}.
+\end{enumerate}
 
 \subsubsection{\texttt{void exc\_trapHandler()}}
-...
+\begin{enumerate}
+    \item Gestisce le eccezioni di tipo Program Trap richiamando la funzione \texttt{passUpOrDie()} passandole come parametro la costante \texttt{GENERALEXCEPT}.
+\end{enumerate}
 
 \subsubsection{\texttt{void syscallHandler()}}
-...
+\begin{enumerate}
+    \item Estrae i parametri della System Call dai registri \texttt{a0}, \texttt{a1}, \texttt{a2} e \texttt{a3} dallo stato dell'eccezione.
+    \item Controlla se è stata richiesta una SYSCALL del Nucleus (valore negativo in \texttt{a0}) mentre il processore si trovava in User Mode (\texttt{MPP == 0}). In tal caso, simula una Program Trap modificando la causa in \texttt{PRIVINSTR} e richiama \texttt{exc\_trapHandler()}.
+    \item Se la richiesta è valida, incrementa il Program Counter (\texttt{pc\_epc}) di 4 byte per le chiamate del Nucleus (da -1 a -10) per evitare loop infiniti.
+    \item Utilizza uno \texttt{switch} per smistare l'esecuzione alla corrispondente funzione \texttt{nsysN()} in base al valore di \texttt{a0}. Se il codice della syscall non è riconosciuto, invoca \texttt{exc\_trapHandler()}.
+\end{enumerate}
 
 \vspace{0.5cm}
 \section{Chiamate di Sistema (syscall.c)}
-...
+Il modulo \texttt{syscall.c} contiene l'implementazione delle 10 System Call fornite dal Nucleus (da \texttt{nsys1} a \texttt{nsys10}).
 
 \vspace{0.5cm}
 \subsection{Descrizione delle Funzioni}
 
 \subsubsection{\texttt{int nsys1(int a1, int a2, int a3)}}
-...
+\begin{enumerate}
+    \item \textbf{CreateProcess}: Alloca un nuovo PCB. Se non ci sono PCB disponibili, restituisce \texttt{NOPROC} (-1).
+    \item Se l'allocazione ha successo, inizializza il nuovo processo copiando lo stato del processore dal parametro \texttt{a1}, imposta la priorità (\texttt{a2}) e il puntatore alla struttura di supporto (\texttt{a3}).
+    \item Inserisce il nuovo PCB nella \texttt{readyQueue} e lo aggiunge come figlio del processo corrente.
+    \item Incrementa il contatore dei processi (\texttt{processCount}) e restituisce il PID del nuovo processo.
+\end{enumerate}
 
 \subsubsection{\texttt{void nsys2(int a1, state\_t *excState)}}
-...
+\begin{enumerate}
+    \item \textbf{TerminateProcess}: Individua il processo da terminare. Se \texttt{a1} è 0, il bersaglio è il processo corrente; altrimenti, ricerca il PCB corrispondente al PID fornito attraversando alberi dei processi, \texttt{readyQueue} e code dei semafori.
+    \item Se il processo non viene trovato (e \texttt{a1} $\ne$ 0), imposta \texttt{a0} a \texttt{NOPROC} e restituisce il controllo.
+    \item Richiama la funzione ricorsiva \texttt{terminateProcess()} per eliminare il processo e tutta la sua progenie, rimuovendoli da eventuali code (semafori o ready queue) e decrementando i relativi contatori (incluso \texttt{softBlock\_count} se bloccati su I/O).
+    \item Invoca lo scheduler tramite \texttt{dispatch()}.
+\end{enumerate}
 
 \subsubsection{\texttt{void nsys3(int a1, state\_t *excState)}}
-...
+\begin{enumerate}
+    \item \textbf{Passeren (P)}: Esegue un'operazione di wait sul semaforo il cui indirizzo fisico è passato in \texttt{a1}.
+    \item Se il valore del semaforo è maggiore di 0, lo decrementa e restituisce il controllo al processo chiamante.
+    \item Se il semaforo è $\le$ 0, salva lo stato del processore nel PCB, calcola e aggiorna il tempo di CPU consumato fino a quel momento (\texttt{p\_time}).
+    \item Blocca il processo inserendolo nella coda del semaforo (ASL), scollega il processo corrente (\texttt{currProc = NULL}) e invoca \texttt{dispatch()}.
+\end{enumerate}
 
 \subsubsection{\texttt{void nsys4(int a1, state\_t *excState)}}
-...
+\begin{enumerate}
+    \item \textbf{Verhogen (V)}: Esegue un'operazione di signal sul semaforo all'indirizzo \texttt{a1}.
+    \item Tenta di sbloccare un processo in attesa su tale semaforo rimuovendolo dalla coda.
+    \item Se trova un processo bloccato, lo reinserisce nella \texttt{readyQueue}. Altrimenti, incrementa il valore del semaforo.
+    \item L'operazione non blocca mai il processo chiamante, che continua la sua esecuzione.
+\end{enumerate}
 
 \subsubsection{\texttt{void nsys5(int a1, int a2, state\_t *excState)}}
-...
+\begin{enumerate}
+    \item \textbf{DoIO}: Avvia un'operazione di I/O sincrona e blocca il processo corrente.
+    \item Calcola l'indice del semaforo corretto partendo dall'indirizzo fisico del registro di comando del device (\texttt{a1}), discriminando il tipo di dispositivo e gestendo in modo speciale i terminali (che hanno semafori separati per ricezione e trasmissione).
+    \item Scrive il comando (\texttt{a2}) nel registro del device, avviando fisicamente l'operazione.
+    \item Salva lo stato, aggiorna il tempo di CPU (\texttt{p\_time}), incrementa il \texttt{softBlock\_count} e blocca il processo sul semaforo del device appena calcolato.
+    \item Invoca lo scheduler tramite \texttt{dispatch()}.
+\end{enumerate}
 
 \subsubsection{\texttt{void nsys6(state\_t *excState)}}
-...
+\begin{enumerate}
+    \item \textbf{GetCPUTime}: Calcola il tempo di processore accumulato dal processo corrente sommando il valore salvato in \texttt{p\_time} al tempo trascorso dall'inizio dell'attuale quanto di esecuzione (\texttt{tod\_start}).
+    \item Inserisce il risultato nel registro \texttt{a0} dello stato dell'eccezione.
+\end{enumerate}
 
 \subsubsection{\texttt{void nsys7(state\_t *excState)}}
-...
+\begin{enumerate}
+    \item \textbf{WaitForClock}: Blocca il processo corrente fino al prossimo scatto del pseudo-clock (gestito dall'Interval Timer ogni 100ms).
+    \item Salva lo stato e aggiorna il tempo di esecuzione come nelle altre syscall bloccanti.
+    \item Incrementa il \texttt{softBlock\_count}, inserisce il processo in coda al semaforo dedicato (\texttt{device\_semaphores[NSUPPSEM]}) e invoca \texttt{dispatch()}.
+\end{enumerate}
 
 \subsubsection{\texttt{void nsys8(state\_t *excState)}}
-...
+\begin{enumerate}
+    \item \textbf{GetSupportPtr}: Restituisce il puntatore alla struttura di supporto del processo corrente inserendolo nel registro \texttt{a0}. Se il processo non ha una struttura di supporto, restituisce \texttt{NULL}.
+\end{enumerate}
 
 \subsubsection{\texttt{void nsys9(int a1, state\_t *excState)}}
-...
+\begin{enumerate}
+    \item \textbf{GetProcessID}: Se \texttt{a1} vale 0, inserisce in \texttt{a0} il PID del processo corrente.
+    \item Se \texttt{a1} è diverso da 0, restituisce il PID del processo padre. Se il processo non ha un padre (\texttt{p\_parent == NULL}), restituisce 0.
+\end{enumerate}
 
 \subsubsection{\texttt{void nsys10(state\_t *excState)}}
-...
-
+\begin{enumerate}
+    \item \textbf{Yield}: Permette al processo corrente di rilasciare volontariamente il processore.
+    \item Salva lo stato del processore nel PCB e calcola il tempo di CPU consumato fino a quel momento.
+    \item Reinserisce il processo corrente all'interno della \texttt{readyQueue}.
+    \item Imposta \texttt{currProc} a \texttt{NULL} e invoca \texttt{dispatch()} per programmare il processo successivo.
+\end{enumerate}
 \end{document}

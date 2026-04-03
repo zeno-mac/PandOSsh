@@ -36,8 +36,7 @@ void exceptionHandler() {
   }
   int excCodeMask = excCode & CAUSE_EXCCODE_MASK;
 
-  if ((excCodeMask >= 24 && excCodeMask <= 28) ||
-      (excCodeMask == 7 && getBADVADDR() >= 0x80000000)) {
+  if (excCodeMask >= 24 && excCodeMask <= 28) {
     exc_tlbHandler();
   } else if (excCodeMask == 8 || excCodeMask == 11) {
     syscallHandler();
@@ -68,21 +67,6 @@ void passUpOrDie(int exceptionType) {
 
     copyState(&currProc->p_supportStruct->sup_exceptState[exceptionType],
               excState);
-    /*
-        currProc->p_supportStruct->sup_exceptState[exceptionType].cause =
-            excState->cause;
-        currProc->p_supportStruct->sup_exceptState[exceptionType].entry_hi =
-            excState->entry_hi;
-        currProc->p_supportStruct->sup_exceptState[exceptionType].mie =
-            excState->mie;
-        currProc->p_supportStruct->sup_exceptState[exceptionType].pc_epc =
-            excState->pc_epc;
-        currProc->p_supportStruct->sup_exceptState[exceptionType].status =
-            excState->status;
-        for (int i = 0; i < STATE_GPR_LEN; i++)
-          currProc->p_supportStruct->sup_exceptState[exceptionType].gpr[i] =
-              excState->gpr[i];
-    */
 
     /* Retrieve the Support Level handler context (SP, status, PC) */
     context_t *ctx =

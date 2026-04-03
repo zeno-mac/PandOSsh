@@ -166,13 +166,6 @@ int nsys1(int a1, int a2, int a3) {
     return NOPROC;
   else {
     copyState(&new_pcb->p_s, newState);
-    // new_pcb->p_s.cause = newState->cause;
-    // ew_pcb->p_s.entry_hi = newState->entry_hi;
-    // new_pcb->p_s.mie = newState->mie;
-    // new_pcb->p_s.pc_epc = newState->pc_epc;
-    // new_pcb->p_s.status = newState->status;
-    // for (int i = 0; i < STATE_GPR_LEN; i++)
-    //   new_pcb->p_s.gpr[i] = newState->gpr[i];
 
     new_pcb->p_prio = prio;
     new_pcb->p_supportStruct = supportp;
@@ -236,15 +229,7 @@ void nsys3(int a1, state_t *excState) {
      * Save the updated processor state (PC already incremented) into the PCB.
      */
     copyState(&currProc->p_s, excState);
-    /*
-    currProc->p_s.entry_hi = excState->entry_hi;
-    currProc->p_s.cause = excState->cause;
-    currProc->p_s.mie = excState->mie;
-    currProc->p_s.pc_epc = excState->pc_epc;
-    currProc->p_s.status = excState->status;
-    for (int i = 0; i < STATE_GPR_LEN; i++)
-      currProc->p_s.gpr[i] = excState->gpr[i];
-*/
+
     cpu_t currentTime;
     STCK(currentTime);
     currProc->p_time += (currentTime - tod_start);
@@ -332,15 +317,7 @@ void nsys5(int a1, int a2, state_t *excState) {
 
   *((int *)a1) = a2;
   copyState(&currProc->p_s, excState);
-  /*
-    currProc->p_s.entry_hi = excState->entry_hi;
-    currProc->p_s.cause = excState->cause;
-    currProc->p_s.mie = excState->mie;
-    currProc->p_s.pc_epc = excState->pc_epc;
-    currProc->p_s.status = excState->status;
-    for (int i = 0; i < STATE_GPR_LEN; i++)
-      currProc->p_s.gpr[i] = excState->gpr[i];
-  */
+
   cpu_t currentTime;
   STCK(currentTime);
   currProc->p_time += (currentTime - tod_start);
@@ -378,15 +355,7 @@ void nsys6(state_t *excState) {
 void nsys7(state_t *excState) {
   int *pseudoClockSem = &device_semaphores[NSUPPSEM];
   copyState(&currProc->p_s, excState);
-  /*
-    currProc->p_s.entry_hi = excState->entry_hi;
-    currProc->p_s.cause = excState->cause;
-    currProc->p_s.mie = excState->mie;
-    currProc->p_s.pc_epc = excState->pc_epc;
-    currProc->p_s.status = excState->status;
-    for (int i = 0; i < STATE_GPR_LEN; i++)
-      currProc->p_s.gpr[i] = excState->gpr[i];
-  */
+
   cpu_t currentTime;
   STCK(currentTime);
   currProc->p_time += (currentTime - tod_start);
@@ -437,15 +406,7 @@ void nsys9(int a1, state_t *excState) {
  */
 void nsys10(state_t *excState) {
   copyState(&currProc->p_s, excState);
-  /*
-    currProc->p_s.entry_hi = excState->entry_hi;
-    currProc->p_s.cause = excState->cause;
-    currProc->p_s.mie = excState->mie;
-    currProc->p_s.pc_epc = excState->pc_epc;
-    currProc->p_s.status = excState->status;
-    for (int i = 0; i < STATE_GPR_LEN; i++)
-      currProc->p_s.gpr[i] = excState->gpr[i];
-  */
+
   cpu_t currentTime;
   STCK(currentTime);
   currProc->p_time += (currentTime - tod_start);
