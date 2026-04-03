@@ -295,9 +295,9 @@ void nsys5(int a1, int a2, state_t *excState) {
   int semIndex = lineIndex * DEVPERINT + devNo;
   /*
    * For terminal devices (lineIndex == 4), distinguish between
-   * receiver (RECV_COMMAND at offset 0x4) and transmitter
-   * (TRANSM_COMMAND at offset 0xC). Transmission semaphores are
-   * stored in the second half of the terminal semaphore range.
+   * receiver and transmitter
+   * Transmission semaphores are stored in the second half
+   * of the terminal semaphore range.
    */
   if (lineIndex == 4) {
     int subDevOffset = a1 - devRegBase;
