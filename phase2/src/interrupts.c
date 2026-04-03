@@ -17,7 +17,16 @@ extern pcb_t *currProc;
 extern int device_semaphores[NRSEMAPHORES];
 extern cpu_t tod_start;
 
-
+/*
+ * Handles Processor Local Timer (PLT) interrupts.
+ *
+ * Acknowledges the interrupt by reloading the PLT with a 5ms TIMESLICE.
+ *
+ * Updates currProc's accumulated CPU time, saves its exception state
+ * into its PCB, and inserts it back into the readyQueue.
+ *
+ * Calls the scheduler's dispatch() procedure to schedule the next process.
+ */
 void pltInterruptHandler() {
   setTIMER(TIMESLICE); // Let 5ms pass on the processor
   cpu_t currentTime;
@@ -26,7 +35,7 @@ void pltInterruptHandler() {
 
   if (currProc) {
     state_t *excState = getCurrExceptionState(); // Copy the processor state at the time of the interrupt
-    copyState(&currProc->p_s, excState);//------------------------------------------------------------------------
+    copyState(&currProc->p_s, excState);
 
     insertProcQ(&readyQueue, currProc); // Place currProc in the ready queue
   }
@@ -34,6 +43,16 @@ void pltInterruptHandler() {
   dispatch();
 }
 
+/*
+ * Handles Interval Timer (IT) pseudo-clock interrupts.
+ *
+ * Acknowledges the interrupt by reloading the IT with 100ms (PSECOND).
+ *
+ * Unlocks all processes waiting on the pseudo-clock semaphore, inserts them
+ * into the readyQueue, decrements softBlock_count for each of them, and resets the semaphore.
+ *
+ * Saves currProc's state and re-queues, then calls dispatch().
+ */
 void itInterruptHandler() {
   LDIT(PSECOND); // Interrupt acknowledgemnet by loading the Interval Timer with 100ms
 
@@ -58,6 +77,18 @@ void itInterruptHandler() {
   dispatch();
 }
 
+
+/*
+ * Handles external hardware device interrupts (Lines 3-7).
+ *
+ * Identifies the specific line and device using bitmaps, reads its status,
+ * and writes the ACK command.
+ *
+ * Unblocks a waiting process (saving status in a0, decreasing softBlock_count)
+ * or increments the Nucleus device semaphore if there's no one waiting.
+ *
+ * Either resumes currProc using LDST or calls dispatch() if the CPU was idle.
+ */
 void deviceInterruptHandler(int excCode) {
 
   int DevNo = -999;
@@ -152,6 +183,18 @@ void deviceInterruptHandler(int excCode) {
   }
 }
 
+
+/*
+ * Wrapper function that works as the entry point for the interrupt exceptions. 
+ *
+ * Identifies the specific interrupt type:
+ * extracts the pending interrupt bits from the exception state cause register.
+ *
+ * Calls pltInterruptHandler(), itInterruptHandler() or deviceInterruptHandler() respectively for the interrupts caused by:
+ * - Processor Local Timer, 
+ * - Interval Timer,
+ * - External Devices.
+ */
 void interruptHandler() {
   state_t *excState = getCurrExceptionState();
   int excCause = excState->cause;
