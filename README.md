@@ -105,11 +105,11 @@ The module is divided in four procedures:
 
 This module implements TLB, Program Trap and Syscall exception handlers. The five most significant functions are the following:
 <ul>
-<li><b>void exceptionHandler()</b>:entry point for all exceptions (except TLB-Refill). It retrieves the current exception state and dispatches control to the appropriate handler based on the exception cause. In particular, it distinguishes between interrupts, TLB exceptions, SYSCALLs and Program Traps, invoking respectively `interruptHandler()`, `exc_tlbHandler()`, `syscallHandler()` or `exc_trapHandler()`;
+<li><b>void exceptionHandler()</b>:entry point for all exceptions (except TLB-Refill). It dispatches control to the appropriate handler based on the exception cause. In particular, it distinguishes between interrupts, TLB exceptions, SYSCALLs and Program Traps;
 <li><b>void passUpOrDie(int)</b>: implements the *Pass Up or Die* mechanism. If the current process does not have a Support Structure, it is terminated (along with its progeny). Otherwise, the exception state is copied into the corresponding support structure area and control is transferred to the Support Level handler using `LDCXT`;
-<li><b>void exc_tlbHandler()</b>: handles TLB-related exceptions. It simply invokes `passUpOrDie()` with the `PGFAULTEXCEPT` index to either pass the exception to the support level or terminate the process.
+<li><b>void exc_tlbHandler()</b>: handles TLB-related exceptions. It simply invokes `passUpOrDie()` with the `PGFAULTEXCEPT` index;
 <li><b>void exc_trapHandler()</b>:handles Program Trap exceptions and all unrecognized cases. It relies on `passUpOrDie()` with the `GENERALEXCEPT` index;
-<li><b>void syscallHandler()</b>: handles SYSCALL exceptions. It checks the validity and privilege level of the requested syscall. Valid nucleus syscalls (in the range `[-10, -1]`) are executed by dispatching to the corresponding `nsys#` function, while invalid or unauthorized requests are treated as Program Traps.
+<li><b>void syscallHandler()</b>: handles SYSCALL exceptions. Valid nucleus syscalls (in the range `[-10, -1]`) are executed by dispatching to the corresponding `nsys#` function, while invalid or unauthorized requests are treated as Program Traps.
 </ul>
 Additionaly this module includes the <b>syscall.c</b> file which defines the various NSYS# system calls that are used in the many handlers of <b>exceptions.c</b>.
 
