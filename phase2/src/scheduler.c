@@ -3,7 +3,6 @@
 #include "../../headers/types.h"
 #include "../../headers/const.h"
 #include "../../headers/listx.h"
-
 #include <uriscv/liburiscv.h>
 #include "../../phase1/headers/pcb.h"
 
@@ -14,23 +13,23 @@ extern pcb_t* currProc;
 
 void dispatch(){
     while(emptyProcQ(&readyQueue)){
-        if (processCount == 0){
+        if (processCount == 0){ 
             HALT();
         }
-        else if(softBlock_count > 0){
+        else if(softBlock_count > 0){ //There are no ready process but some are waiting
             setMIE(MIE_ALL & ~MIE_MTIE_MASK);
             unsigned int status = getSTATUS();
             status |= MSTATUS_MIE_MASK;
             setSTATUS(status);
             WAIT();
         }
-        else{
+        else{ //Fallback case when a deadlock is happening
             PANIC();
         }
     }
     pcb_t* pcb = removeProcQ(&readyQueue);
     currProc = pcb;
-    setTIMER(TIMESLICE);
+    setTIMER(TIMESLICE); //Load 5 milliseconds on the PLT
   
-    LDST(&(pcb->p_s));
+    LDST(&(pcb->p_s)); //Perform a Load Processor State on the processor state stored in PCB of the Current Process of the current CPU
 }
