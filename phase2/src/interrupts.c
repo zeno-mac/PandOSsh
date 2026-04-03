@@ -5,14 +5,13 @@
 #include "../../phase1/headers/pcb.h"
 #include "../headers/initial.h"
 #include "../headers/scheduler.h"
-#include <uriscv/cpu.h> //NON AVREBBE SENSO INCLUDERE TUTTO CIO' CHE SI TROVA IN uriscv/ ?????????????????????????
+#include <uriscv/cpu.h> 
 #include <uriscv/liburiscv.h>
 #include "../headers/auxfun.h"
 
 
 // Import global vars from initial.c
 extern struct list_head readyQueue;
-// extern int processCount;
 extern int softBlock_count;
 extern pcb_t *currProc;
 extern int device_semaphores[NRSEMAPHORES];
@@ -20,8 +19,7 @@ extern cpu_t tod_start;
 
 
 void pltInterruptHandler() {
-  setTIMER(TIMESLICE); // let 5ms pass on the processor:
-                       // Aggiorna il p_time PRIMA di toglierlo dalla CPU!
+  setTIMER(TIMESLICE); // Let 5ms pass on the processor
   cpu_t currentTime;
   STCK(currentTime);
   currProc->p_time += (currentTime - tod_start);
@@ -40,11 +38,10 @@ void pltInterruptHandler() {
   }
 
   dispatch();
-  // LDST(getCurrExceptionState());
 }
 
 void itInterruptHandler() {
-  LDIT(PSECOND); // Acknowledging the interrupt by loading the Interval Timer with 100ms.
+  LDIT(PSECOND); // Interrupt acknowledgemnet by loading the Interval Timer with 100ms
 
   int *pseudoClockSem = &device_semaphores[NSUPPSEM]; // Get the last semaphore
   pcb_t *unblockedPcb;
@@ -58,7 +55,7 @@ void itInterruptHandler() {
 
   // Returning the control to the curr proc. if that exists. Identical to the pltInterruptHandler
   if (currProc) {
-    state_t *excState = getCurrExceptionState(); // Loading the state on the current proc.
+    state_t *excState = getCurrExceptionState(); // Loading the state on the curr proc.
   
     copyState(&currProc->p_s, excState);
     
@@ -66,7 +63,6 @@ void itInterruptHandler() {
   }
 
   dispatch();
-  // LDST(getCurrExceptionState());
 }
 
 void deviceInterruptHandler(int excCode) {
@@ -135,7 +131,7 @@ void deviceInterruptHandler(int excCode) {
     if ((transmissionStatus & 0xFF) !=
         0) { // If the transimmion register contains a value, hence the transmission is completed
       status = transmissionStatus;
-      *((int *)(devAddr + 0xC)) = ACK; // Acknowledges the end of this transmission
+      *((int *)(devAddr + 0xC)) = ACK; // ACKs the end of this transmission
     } else {   // The interrupts comes from the reciever
       status = *((int *)(devAddr + 0x0)); // Reads the reciever status
       *((int *)(devAddr + 0x4)) = ACK;
@@ -153,8 +149,7 @@ void deviceInterruptHandler(int excCode) {
     insertProcQ(&readyQueue, unblockedPcb);
     softBlock_count--;
 
-    // Saves the currProc state and puts him in the queue since there is another process
-    //(the unblocked one) who should be starting as we call the scheduler with dispatch()
+    // Saves the currProc state and puts him in the queue since there is another process(the unblocked one) who should be starting as we call the scheduler with dispatch()
     if (currProc) {
       LDST(getCurrExceptionState());
     } else {
