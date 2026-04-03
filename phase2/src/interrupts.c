@@ -95,27 +95,21 @@ void deviceInterruptHandler(int excCode) {
   int IntLineNo = -999;
 
   switch (excCode) {
-
   case IL_DISK:
     IntLineNo = 3;
     break;
-
   case IL_FLASH:
     IntLineNo = 4;
     break;
-
   case IL_ETHERNET:
     IntLineNo = 5;
     break;
-
   case IL_PRINTER:
     IntLineNo = 6;
     break;
-
   case IL_TERMINAL:
     IntLineNo = 7;
     break;
-
   default:
     return;
   }
@@ -150,11 +144,12 @@ void deviceInterruptHandler(int excCode) {
   int status;
 
   if (IntLineNo == 7) { // Check to see if this interrupt is generated from a terminal "sender"
-    int transmissionStatus = *((int *)(devAddr + 0x8)); // Reads the transmission status register using the offset of 0x8
+    int transmissionStatus = *((int *)(devAddr + 0x80)); // Reads the transmission status register using the offset of 0x8
     if ((transmissionStatus & 0xFF) !=0) { // If the transimmion register contains a value, hence the transmission is completed
       status = transmissionStatus;
       *((int *)(devAddr + 0xC)) = ACK; // ACKs the end of this transmission
-    } else {   // The interrupts comes from the reciever
+    } 
+    else {   // The interrupts comes from the reciever
       status = *((int *)(devAddr + 0x0)); // Reads the reciever status
       *((int *)(devAddr + 0x4)) = ACK;
       semaphoreIdx += DEVPERINT; // Offsets the semaphore to the recieving semaphore index
