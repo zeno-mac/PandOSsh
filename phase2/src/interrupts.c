@@ -26,13 +26,7 @@ void pltInterruptHandler() {
 
   if (currProc) {
     state_t *excState = getCurrExceptionState(); // Copy the processor state at the time of the interrupt
-    currProc->p_s.entry_hi = excState->entry_hi;
-    currProc->p_s.cause = excState->cause;
-    currProc->p_s.mie = excState->mie;
-    currProc->p_s.pc_epc = excState->pc_epc;
-    currProc->p_s.status = excState->status;
-    for (int i = 0; i < STATE_GPR_LEN; i++)
-      currProc->p_s.gpr[i] = excState->gpr[i];
+    copyState(&currProc->p_s, excState);//------------------------------------------------------------------------
 
     insertProcQ(&readyQueue, currProc); // Place currProc in the ready queue
   }
@@ -56,7 +50,6 @@ void itInterruptHandler() {
   // Returning the control to the curr proc. if that exists. Identical to the pltInterruptHandler
   if (currProc) {
     state_t *excState = getCurrExceptionState(); // Loading the state on the curr proc.
-  
     copyState(&currProc->p_s, excState);
     
     insertProcQ(&readyQueue, currProc);
@@ -126,10 +119,8 @@ void deviceInterruptHandler(int excCode) {
   int status;
 
   if (IntLineNo == 7) { // Check to see if this interrupt is generated from a terminal "sender"
-    int transmissionStatus =
-        *((int *)(devAddr + 0x8)); // Reads the transmission status register using the offset of 0x8
-    if ((transmissionStatus & 0xFF) !=
-        0) { // If the transimmion register contains a value, hence the transmission is completed
+    int transmissionStatus = *((int *)(devAddr + 0x8)); // Reads the transmission status register using the offset of 0x8
+    if ((transmissionStatus & 0xFF) !=0) { // If the transimmion register contains a value, hence the transmission is completed
       status = transmissionStatus;
       *((int *)(devAddr + 0xC)) = ACK; // ACKs the end of this transmission
     } else {   // The interrupts comes from the reciever
