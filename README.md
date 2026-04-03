@@ -118,13 +118,13 @@ Additionaly this module includes the <b>syscall.c</b> file which defines the var
 As we already stated, this module ( file <b>syscall.c</b>) contains the implementation of the system call:
 <ul>
 <li><b>int nsys1(int a1, int a2, int a3)</b>: this service causes a new process to be created;
-<li><b>void nsys2(int a1, state_t *excState)</b>: this service does the opposite of the NSYS1, it terminates a process;
+<li><b>void nsys2(int a1, state_t *excState)</b>: this service terminates a process and all of its progeny recursively;
 <li><b>void nsys3(int a1, state_t *excState)</b>: using this function the Nucleus is asked to perform P() on a semaphore;
 <li><b>void nsys4(int a1, state_t *excState)</b>: symmetrically, the Nucleus recieves a request of V() on a semaphore;
 <li><b>void nsys5(int a1, int a2, state_t *excState)</b>: this syscall is used to block the current process as it needs to do an I/O operation;
 <li><b>void nsys6(state_t *excState)</b>: using this function we request the accumulated time that a certain process has occupied the CPU;
 <li><b>void nsys7(state_t *excState)</b>: this service let's you perform a semaphore P() on the Nucleus Pseudo-clock semaphore;
-<li><b>void nsys8(state_t *excState)</b>: returns, if possible, the value of the PCB p_supportStruct;
+<li><b>void nsys8(state_t *excState)</b>: returns, if possible, the value of the current PCB p_supportStruct;
 <li><b>void nsys9(int a1, state_t *excState)</b>: allows us to use the GetProcessId() function;
 <li><b>void nsys10(state_t *excState)</b>: the process calling this procedure decides to yield, which means to refuse to use the CPU in his current time slice;
 </ul>
