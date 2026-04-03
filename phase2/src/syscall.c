@@ -274,17 +274,10 @@ void nsys4(int a1, state_t *excState) {
  *   a1: physical address of the device's command register
  *   a2: command value to write to the command register
  *
- * Steps:
- *   1. Compute the semaphore index from the command register address.
- *   2. Write the command to the device register (starts the I/O).
- *   3. Save the process state into the PCB.
- *   4. Update accumulated CPU time.
- *   5. Increment softBlock_count (process is waiting for I/O).
- *   6. Block the process on the device semaphore.
- *   7. Call dispatch().
- *
- * The device interrupt handler (in interrupts.c) will unblock this
- * process and place the device status in reg_a0 when I/O completes.
+ *   Compute the semaphore index from the command register address
+ *   and write the command to the device register.
+ *   Increment softBlock_count and block the process on 
+ *   the device semaphore,  then call dispatch().
  */
 void nsys5(int a1, int a2, state_t *excState) {
   /*
