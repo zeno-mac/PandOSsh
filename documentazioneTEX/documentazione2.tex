@@ -14,35 +14,63 @@
 \maketitle
 
 \section{Inizializzazione (initial.c)}
-...
+Il modulo \texttt{initial.c} definisce il punto di ingresso del sistema e si occupa dell'inizializzazione generale del Nucleus.
 
 \vspace{0.5cm}
 \subsection{Strutture Dati Globali}
 Le variabili globali definite nel modulo sono:
 \begin{itemize}
-    \item ...
+    \item \texttt{tod\_start}: Memorizza il tempo di inizio per calcolare l'utilizzo della CPU.
+    \item \texttt{readyQueue}: Coda dei processi in stato "ready".
+    \item \texttt{processCount} e \texttt{softBlock\_count}: Contatori rispettivamente dei processi attivi e di quelli bloccati in attesa di I/O o timer.
+    \item \texttt{currProc}: Puntatore al PCB del processo attualmente in esecuzione.
+    \item \texttt{device\_semaphores}: Array dei semafori per sincronizzare i dispositivi esterni e lo Pseudo-clock.
 \end{itemize}
 
 \vspace{0.5cm}
 \subsection{Descrizione delle Funzioni}
 
 \subsubsection{\texttt{pcb\_t* allocFirstPcb()}}
-...
+\begin{enumerate}
+    \item Alloca un nuovo PCB e ne inizializza lo stato del processore e imposta il Program Counter alla funzione \texttt{test}.
+    \item Inizializza a \texttt{NULL} o zero i restanti campi gestionali (albero dei processi, tempo di CPU, puntatore di supporto e semaforo bloccante).
+    \item Imposta lo Stack Pointer per utilizzare l'ultimo frame disponibile della RAM e restituisce il PCB.
+\end{enumerate}
 
 \subsubsection{\texttt{void initVector()}}
-...
+\begin{enumerate}
+    \item Accede al Pass Up Vector del Processore 0 per configurare la gestione delle eccezioni.
+    \item Registra gli indirizzi dei due gestori principali: \texttt{uTLB\_RefillHandler} per i TLB-Refill e \texttt{exceptionHandler} per tutte le altre eccezioni.
+    \item Imposta i rispettivi Stack Pointer al top della pagina di stack riservata al Nucleus.
+\end{enumerate}
 
 \subsubsection{\texttt{int main()}}
-...
+\begin{enumerate}
+    \item Inizializza le strutture dati di base (\texttt{readyQueue}, PCB e ASL) e configura il Pass Up Vector richiamando \texttt{initVector()}.
+    \item Carica l'Interval Timer di sistema con un valore di 100 millisecondi.
+    \item Istanzia il processo iniziale tramite \texttt{allocFirstPcb()}, lo inserisce nella \texttt{readyQueue} e incrementa il contatore dei processi.
+    \item Cede il controllo al sistema invocando lo scheduler tramite \texttt{dispatch()}.
+\end{enumerate}
+
 
 \section{Scheduler (scheduler.c)}
-...
+Il modulo \texttt{scheduler.c} implementa il gestore dei processi tramite un algoritmo di scheduling round-robin con prelazione (time slice di 5ms), garantendo che ogni processo pronto abbia l'opportunità di essere eseguito.
 
 \vspace{0.5cm}
 \subsection{Descrizione delle Funzioni}
 
 \subsubsection{\texttt{void dispatch()}}
-...
+\begin{enumerate}
+    \item Verifica lo stato della \texttt{readyQueue}. Se è vuota:
+    \begin{itemize}
+        \item Arresta il sistema (\texttt{HALT()}) se non ci sono processi attivi (\texttt{processCount == 0}).
+        \item Entra in stato di attesa (\texttt{WAIT()}), abilitando gli interrupt, se ci sono processi bloccati (\texttt{softBlock\_count > 0}).
+        \item Dichiara un deadlock (\texttt{PANIC()}) se ci sono processi attivi ma nessuno è in attesa di I/O o timer.
+    \end{itemize}
+    \item Se la coda contiene processi, ne estrae il primo e lo imposta come processo corrente (\texttt{currProc}).
+    \item Carica il Processor Local Timer (PLT) con il time slice di 5 millisecondi.
+    \item Avvia l'esecuzione del processo caricandone lo stato sul processore (\texttt{LDST}).
+\end{enumerate}
 
 \section{Gestione Interrupt (interrupts.c)}
 Il modulo \texttt{interrupts.c} gestisce le eccezioni di interrupt sia dei timer (Processor Local Timer e Interval Timer) sia dei dispositivi hardware. I dispositivi gestiti sono Disk devices, Flash devices, Network devices, Printer devices e Terminal devices(che possono essere di tipo transmitter o reciever).
