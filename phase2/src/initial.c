@@ -15,7 +15,6 @@ int processCount = 0; // Counter indicating the number of started, but not yet t
 int softBlock_count = 0; // Counter indicating the number of process blocked
 pcb_t* currProc = NULL; // Pointer to the pcb in "running" state
 int device_semaphores[NRSEMAPHORES] = {0}; // Semaphores for each external device (24*2 +1)
-//TODO Check if semaphores are correct this way
 
 extern void uTLB_RefillHandler();
 extern void test();
