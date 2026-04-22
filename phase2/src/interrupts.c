@@ -28,7 +28,7 @@ extern cpu_t tod_start;
  * Calls the scheduler's dispatch() procedure to schedule the next process.
  */
 void pltInterruptHandler() {
-  setTIMER(TIMESLICE); // Let 5ms pass on the processor
+  setTIMER(TIMESLICE * *((int *)TIMESCALEADDR)); // Let 5ms pass on the processor
   cpu_t currentTime;
   STCK(currentTime);
   currProc->p_time += (currentTime - tod_start);

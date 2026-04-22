@@ -308,9 +308,7 @@ void nsys5(int a1, int a2, state_t *excState) {
 
   int *semAdd = &device_semaphores[semIndex];
 
-  *((int *)a1) = a2;
-  copyState(&currProc->p_s, excState);
-
+    copyState(&currProc->p_s, excState);
   cpu_t currentTime;
   STCK(currentTime);
   currProc->p_time += (currentTime - tod_start);
@@ -320,6 +318,8 @@ void nsys5(int a1, int a2, state_t *excState) {
   insertBlocked(semAdd, currProc);
 
   currProc = NULL;
+  *((int *)a1) = a2;
+
   dispatch();
 
   return;
@@ -404,7 +404,7 @@ void nsys10(state_t *excState) {
   STCK(currentTime);
   currProc->p_time += (currentTime - tod_start);
 
-  insertProcQ(&readyQueue, currProc);
+    insertProcQ(&readyQueue, currProc);
 
   currProc = NULL;
   dispatch();
