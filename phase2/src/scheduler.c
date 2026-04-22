@@ -10,6 +10,7 @@ extern struct list_head readyQueue;
 extern int processCount;
 extern int softBlock_count;
 extern pcb_t* currProc;
+extern cpu_t tod_start;
 
 void dispatch(){
     while(emptyProcQ(&readyQueue)){
@@ -30,6 +31,6 @@ void dispatch(){
     pcb_t* pcb = removeProcQ(&readyQueue);
     currProc = pcb;
     setTIMER(TIMESLICE); //Load 5 milliseconds on the PLT
-  
+    STCK(tod_start);
     LDST(&(pcb->p_s)); //Perform a Load Processor State on the processor state stored in PCB of the Current Process of the current CPU
 }

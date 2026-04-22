@@ -403,9 +403,10 @@ void nsys10(state_t *excState) {
   cpu_t currentTime;
   STCK(currentTime);
   currProc->p_time += (currentTime - tod_start);
-
-    insertProcQ(&readyQueue, currProc);
-
+  
+  pcb_t * old_head = removeProcQ(&readyQueue);
+  insertProcQ(&readyQueue, currProc);
+  list_add(&(old_head->p_list), &readyQueue);
   currProc = NULL;
   dispatch();
   return;
