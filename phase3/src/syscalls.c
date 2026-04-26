@@ -1,10 +1,10 @@
 #include "../../headers/const.h"
 #include "../../headers/types.h"
-#include "../../phase2/src/auxfun.c"
+#include "../../phase2/headers/auxfun.h"
 #include "../headers/initProc.h"
 #include <uriscv/liburiscv.h>
 
-#define UPROC_PRIORITY PROCESS_PRIO_LOW // TODO: define priority properly
+#define UPROC_PRIORITY PROCESS_PRIO_LOW // TODO: understand priority properly
 
 extern int masterSemaphore;
 extern int shellSemaphore;

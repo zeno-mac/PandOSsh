@@ -1,6 +1,6 @@
 #include "../../headers/const.h"
 #include "../../headers/types.h"
-#include "../../phase2/src/auxfun.c"
+#include "../../phase2/headers/auxfun.h"
 #include <uriscv/liburiscv.h>
 
 void generalExceptionHandler() {}
