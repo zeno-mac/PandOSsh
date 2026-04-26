@@ -26,42 +26,21 @@ void sys6(support_t *sup) {
 
   int asid = excState->reg_a1;
 
-  /*
-   * In questa fase semplificata solo la shell può chiamare EXECUTE.
-   */
   if (sup->sup_asid != SHELL_ASID) {
     sys2(sup);
   }
 
-  /*
-   * ASID validi: 1..UPROCMAX.
-   * Però ASID 1 è la shell, quindi non la lasciamo rieseguire tramite SYS6.
-   */
   if (asid <= 0 || asid > UPROCMAX || asid == SHELL_ASID) {
     sys2(sup);
   }
 
-  /*
-   * La support_t deve essere globale/static,
-   * perché il PCB conserverà un puntatore a questa struttura.
-   */
-  support_t *childSupport = &supportPool[asid - 1];
+  int pid = createUProc(asid);
 
-  /*
-   * childState può essere locale perché CREATEPROCESS copia subito
-   * lo stato dentro il PCB, come fa la tua nsys1 con copyState().
-   */
-  state_t childState;
+  if (pid == NOPROC) {
+    sys2(sup);
+  }
 
-  initUProc(asid, &childState, childSupport);
-
-  int pid = SYSCALL(CREATEPROCESS, (int)&childState, UPROC_PRIORITY,
-                    (int)childSupport);
-
-  /*
-   * Qui blocchi la shell.
-   * shellSemaphore parte da 0.
-   * Verrà sbloccata quando il figlio termina e SYS2 fa V(shellSemaphore).
-   */
   SYSCALL(PASSEREN, (int)&shellSemaphore, 0, 0);
+
+  LDST(excState);
 }
