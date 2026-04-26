@@ -1,3 +1,4 @@
+#include "../headers/syscalls.h"
 #include "../../headers/const.h"
 #include "../../headers/types.h"
 #include "../../phase2/headers/auxfun.h"
