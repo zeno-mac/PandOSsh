@@ -7,6 +7,7 @@
 #include "../../phase1/headers/asl.h"
 #include <uriscv/liburiscv.h>
 #include "../headers/scheduler.h"
+#include "../../phase3/headers/vmSupport.h"
 
 cpu_t tod_start;
 
