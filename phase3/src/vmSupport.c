@@ -5,6 +5,42 @@
 #include "../headers/vmSupport.h"
 #include "../../headers/types.h"
 #include "../../headers/const.h"
+#include "../../phase2/src/initial.c"
+
+static swap_t swapPool[POOLSIZE];
+int swapSemaphore;
+extern pcb_t *currProc;
+
+void initPagetable(pteEntry_t *pageTable, int asid) {
+    for (int i = 0; i < MAXPAGES-1; i++) {
+        pageTable[i].pte_entryHI = (KUSEG + (i << VPNSHIFT) )| (asid << ASIDSHIFT);
+        pageTable[i].pte_entryLO = DIRTYON;
+    }
+
+    pageTable[31].pte_entryHI = (0xBFFFF << VPNSHIFT) | (asid << ASIDSHIFT);
+    //TODO Global set to 1 or 0? Nelle specifiche segna Global set to 1 (off), che vuol dire?
+    pageTable[31].pte_entryLO = DIRTYON;
+}
+
+//TODO Spostare in exceptions.c secondo specifiche
+void uTLB_RefillHandler(void){
+    state_t *saved_state = (state_t *) BIOSDATAPAGE;
+    unsigned int missingVPN = (saved_state->entry_hi & GETPAGENO) >> VPNSHIFT;
+    pteEntry_t *pageTable = currProc->p_supportStruct->sup_privatePgTbl;
+    int pageIndex = missingVPN % MAXPAGES;
+    setENTRYHI(pageTable[pageIndex].pte_entryHI);
+    setENTRYLO(pageTable[pageIndex].pte_entryLO);
+    TLBWR();    
+    LDST(saved_state);
+}
+
+void initSwapPool() {
+    for (int i = 0; i < POOLSIZE; i++){
+        swapPool[i].sw_asid = -1;   // -1 = unoccupied
+        swapPool[i].sw_pageNo = -1; // Numero di pagina non valido
+        swapPool[i].sw_pte = NULL;}
+    swapSemaphore = 1;
+}
 
 // funzione aux per ricavare il blocco dato il VPN - Virtual Page Number
 // blocco 31 <=> vpn 0xBFFFF
