@@ -12,7 +12,6 @@
 static swap_t swapPool[POOLSIZE];
 int swapSemaphore;
 extern pcb_t *currProc;
-extern 
 
 void initPagetable(pteEntry_t *pageTable, int asid) {
     for (int i = 0; i < MAXPAGES-1; i++) {
@@ -130,14 +129,14 @@ void pager() {
         int x=swapPool[i].sw_asid;
         int k=swapPool[i].sw_pageNo;
         pteEntry_t *xPte=swapPool[i].sw_pte;
-
+        
+        int status=getSTATUS();
+        setSTATUS(status & ~MSTATUS_MIE_MASK);
         //Update process x’s Page Table: mark Page Table entry k as not valid.
         xPte->pte_entryLO &= ~ VALIDON;
 
         //(*)Update the TLB: if process x’s page k’s Page Table entry is currently cached, 
         //it is clearly out of date; it was just updated in the previous step.
-        int status=getSTATUS();
-        setSTATUS(status & ~MSTATUS_MIE_MASK);
         TLBCLR();
         setSTATUS(status);
 
@@ -163,14 +162,14 @@ void pager() {
     else
         pageIdx=missingPageNo-0x80000; //pageNo-baseAddrDellePage
 
+    int status=getSTATUS();
+    setSTATUS(status & ~MSTATUS_MIE_MASK);
     swapPool[i].sw_pte=&suppPtr->sup_privatePgTbl[pageIdx];
 
     //Update the curr proc Page Table entry for page p to indicate it's present (Valid) and occupying frame i (PFN field)
     swapPool[i].sw_pte->pte_entryLO=physicalFrame | DIRTYON | VALIDON;
 
     //Update the TLB. Same as before (*)
-    int status=getSTATUS();
-    setSTATUS(status & ~MSTATUS_MIE_MASK);
     TLBCLR();
     setSTATUS(status);
 
