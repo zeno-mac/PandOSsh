@@ -48,69 +48,86 @@ void initSwapPool() {
 // SEZIONE 4.2 - Mazzo
 
 void pager() {
-    
+    //Obtain the pointer to the Current Process’s Support Structure: NSYS8.
     support_t *suppPtr = (support_t *)SYSCALL(GETSUPPORTPTR, 0, 0, 0); //Forse non serve casting a (support_t *)
 
-    
+    //Determine the cause of the TLB exception. The saved exception state responsible for this
+    //TLB exception should be found in sup_exceptState[0]’s Cause register.
     int cause = suppPtr->sup_exceptState[0].cause;
     cause=(cause & GETEXECCODE) >> CAUSESHIFT;
 
-    
+    //if the Cause is a TLB-Mod exception, treat it as a program trap.
     if(cause==EXC_MOD) programTrapHandler(suppPtr);
 
-    
+    //Gain mutual exclusion over the Swap Pool table (NSYS3)
     SYSCALL(PASSEREN, &swapSemaphore, 0, 0);
 
-    
+    //determine the missing page number: found in the saved exception state’s EntryHi
     int missingPageNo = suppPtr->sup_exceptState[0].entry_hi;
     missingPageNo = missingPageNo & GETPAGENO;
 
+    //Let's use a FIFO round-robin algorithm fo swap the pages to pick a frame i from the Swap Pool. 
     static int fifoCont=0;
     int i=fifoCont;
     fifoCont=(fifoCont+1) % POOLSIZE;
 
     int physicalFrame=FLASHPOOLSTART +(i*PAGESIZE);
 
-    
+    //Determine if frame i is occupied; examine entry i in the Swap Pool table
     if(swapPool[i].sw_asid!=-1) {
-        //Frame occupied
+        //Frame occupied: assume it is occupied by logical page number k belonging to process x (ASID) and that it is “dirty” 
         int x=swapPool[i].sw_asid;
         int k=swapPool[i].sw_pageNo;
         pteEntry_t *xPte=swapPool[i].sw_pte;
 
-        xPte->pte_entryLO &= ~VALIDON;
+        //Update process x’s Page Table: mark Page Table entry k as not valid.
+        xPte->pte_entryLO &= ~ VALIDON;
 
+        //(*)Update the TLB: if process x’s page k’s Page Table entry is currently cached, 
+        //it is clearly out of date; it was just updated in the previous step.
         int status=getSTATUS();
         setSTATUS(status & ~MSTATUS_MIE_MASK);
         TLBCLR();
         setSTATUS(status);
 
+        //Write the contents of frame i to the correct location on process x’s flash device 
         readWriteFlashdrive(x,k,physicalFrame,FLASHWRITE);
 
     }
-
+    //Read the contents of the curr proc’s flash device logical page p into frame i
     readWriteFlashdrive(suppPtr->sup_asid, missingPageNo, physicalFrame, FLASHREAD);
 
+    //Update the Swap Pool table’s entry i to reflect frame i’s new contents: page p belonging 
+    // to the curr proc's ASID, and a ptr to the curr proc's Page Table entry for page p
     swapPool[i].sw_asid=suppPtr->sup_asid;
     swapPool[i].sw_pageNo=missingPageNo;
 
+    //Find the index of the page table: 0..30->text/data, 31->stack
+    // blocco 31 <=> vpn 0xBFFFF
+    // blocchi[0..30] <=> vpn 0x80000,0x80001,..,0x8001E
+    // quindi per vpn=0x80002 il blocco è il 2
     int pageIdx;
     if(missingPageNo==0xBFFFF) //Entry 31: pagina stack (VPN 0xBFFFF)
         pageIdx=31;
     else
-        pageIdx=missingPageNo % MAXPAGES;
+        pageIdx=missingPageNo-0x80000; //pageNo-baseAddrDellePage
 
     swapPool[i].sw_pte=&suppPtr->sup_privatePgTbl[pageIdx];
 
+    //Update the curr proc Page Table entry for page p to indicate it's present (Valid) and occupying frame i (PFN field)
     swapPool[i].sw_pte->pte_entryLO=physicalFrame | DIRTYON | VALIDON;
 
+    //Update the TLB. Same as before (*)
     int status=getSTATUS();
     setSTATUS(status & ~MSTATUS_MIE_MASK);
     TLBCLR();
     setSTATUS(status);
 
+    //Release mutual exclusion over the Swap Pool table
     SYSCALL(VERHOGEN,&swapSemaphore,0,0);
 
+    //Return control to the curr proc to retry the instruction that caused the page fault: 
+    //LDST on the saved exception state.
     LDST(&suppPtr->sup_exceptState[0]);
 }
 
@@ -128,7 +145,7 @@ int getFlashBlock(int vpn){
 
 // funzione aux per calcolare l'addr base dei registri dei flash dev
 // ogni processo utente ha un suo flash dev il cui asid va da 1..8, 
-// segue che i gegisti vanno da 0..7 = (1..8)-1
+// segue che i registi vanno da 0..7 = (1..8)-1
 devreg_t * getFlashRegister(int asid){
     int devNo=asid-1;
 
