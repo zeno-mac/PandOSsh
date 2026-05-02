@@ -16,10 +16,22 @@ extern int shellSemaphore;
  * VARIABILI ESTERNE — vmSupport.c (Persona 1/2)
  * ========================================================================== */
 
-extern int swapPoolSemaphore;
-extern int holdingSwapMutex[UPROCMAX];
+/*
+per chi deve scrivere vmsupport.c e implementare pager() e programTrapHandler() è necessario tenere traccia se un processo sta tenendo il mutex del swap pool, in modo da rilasciarlo in caso di terminazione forzata:
 
-// Quella a seguire farle ma mi serve questo:
+int holdingSwapMutex[UPROCMAX] = {0};
+
+// dentro pager(), dopo PASSEREN:
+holdingSwapMutex[suppPtr->sup_asid - 1] = 1;
+
+// dentro pager(), prima di VERHOGEN:
+holdingSwapMutex[suppPtr->sup_asid - 1] = 0;
+*/
+
+extern int holdingSwapMutex[UPROCMAX]; // serve per syscall terminate, per capire se il processo sta tenendo il mutex del swap pool, in modo da rilasciarlo in caso di terminazione forzata (scritto nella sezione 8 nota importante)
+extern int swapSemaphore;
+
+// Quella a seguire farle ma mi serve questo da persona 4:
 
 /* ==========================================================================
  * HELPER I/O TERMINALE
@@ -41,41 +53,60 @@ extern int holdingSwapMutex[UPROCMAX];
 
 extern int termWriteSemaphore;
 extern int termReadSemaphore;
-/*
- * writeTerminal  (statica, privata al modulo)
- *
- * Scrive 'len' caratteri di 'str' sul terminale 0.
- * Ogni carattere e' trasmesso singolarmente tramite DOIO (NSYS5).
- *
- * Comando al trasmettitore: (char << 8) | TRANSMITCHAR
- *   TRANSMITCHAR = 2  (da headers/const.h)
- *
- * Status (bit 7:0):
- *   OKCHARTRANS = 5 -> carattere trasmesso  (da headers/const.h)
- *   altro           -> errore, ritorna il negativo del byte di stato
- *
- * Spec: Sezione 7.2, p.10
- */
-static int writeTerminal(char *str, int len);
 
-/*
- * readTerminal  (statica, privata al modulo)
- *
- * Legge caratteri dal terminale 0 nel buffer 'buf'.
- * Ogni carattere e' letto singolarmente tramite DOIO (NSYS5).
- *
- * Comando al ricevitore: RECEIVECHAR = 2  (da headers/const.h)
- *
- * Status restituito da DOIO:
- *   bit  7:0 -> stato  (CHARRECV = 5 se ok, da headers/const.h)
- *   bit 15:8 -> carattere ricevuto
- *
- * Termina al '\n' o su errore.
- * Ritorna numero di caratteri ricevuti o negativo del device status.
- *
- * Spec: Sezione 7.3, p.10
- */
-static int readTerminal(char *buf);
+static int writeTerminal(char *str, int len)
+{
+  termreg_t *term = (termreg_t *)DEV_REG_ADDR(IL_TERMINAL, 0);
+  int transmitted = 0;
+
+  /* Spec 7.2: "suspended until a line of output has been transmitted" */
+  SYSCALL(PASSEREN, (int)&termWriteSemaphore, 0, 0);
+
+  for (int i = 0; i < len; i++)
+  {
+    unsigned int cmd = ((unsigned int)(unsigned char)str[i] << 8) | TRANSMITCHAR;
+    unsigned int status = SYSCALL(DOIO, (int)&term->transm_command, (int)cmd, 0);
+
+    if ((status & 0xFF) != OKCHARTRANS)
+    {
+      SYSCALL(VERHOGEN, (int)&termWriteSemaphore, 0, 0);
+      return -((int)(status & 0xFF));
+    }
+    transmitted++;
+  }
+
+  SYSCALL(VERHOGEN, (int)&termWriteSemaphore, 0, 0);
+  return transmitted;
+}
+
+static int readTerminal(char *buf)
+{
+  termreg_t *term = (termreg_t *)DEV_REG_ADDR(IL_TERMINAL, 0);
+  int received = 0;
+
+  /* Spec 7.3: "suspended until a line of input has been transmitted" */
+  SYSCALL(PASSEREN, (int)&termReadSemaphore, 0, 0);
+
+  while (1)
+  {
+    unsigned int status = SYSCALL(DOIO, (int)&term->recv_command, (int)RECEIVECHAR, 0);
+
+    if ((status & 0xFF) != CHARRECV)
+    {
+      SYSCALL(VERHOGEN, (int)&termReadSemaphore, 0, 0);
+      return -((int)(status & 0xFF));
+    }
+
+    char c = (char)((status >> 8) & 0xFF);
+    buf[received++] = c;
+
+    if (c == '\n')
+      break;
+  }
+
+  SYSCALL(VERHOGEN, (int)&termReadSemaphore, 0, 0);
+  return received;
+}
 
 // TERMINATE
 void sys2(support_t *sup) {
@@ -88,7 +119,7 @@ void sys2(support_t *sup) {
   if (holdingSwapMutex[asid - 1])
   {
     holdingSwapMutex[asid - 1] = 0;
-    SYSCALL(VERHOGEN, (int)&swapPoolSemaphore, 0, 0);
+    SYSCALL(VERHOGEN, (int)&swapSemaphore, 0, 0);
   }
 
   if (asid == SHELL_ASID)
