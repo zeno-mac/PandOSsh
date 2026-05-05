@@ -110,7 +110,7 @@ void pager() {
     if(cause==EXC_MOD) programTrapHandler(suppPtr);
 
     //Gain mutual exclusion over the Swap Pool table (NSYS3)
-    SYSCALL(PASSEREN, &swapSemaphore, 0, 0);
+    SYSCALL(PASSEREN, (int)&swapSemaphore, 0, 0);
 
     //determine the missing page number: found in the saved exception state’s EntryHi
     int missingPageNo = suppPtr->sup_exceptState[0].entry_hi;
@@ -174,7 +174,7 @@ void pager() {
     setSTATUS(status);
 
     //Release mutual exclusion over the Swap Pool table
-    SYSCALL(VERHOGEN,&swapSemaphore,0,0);
+    SYSCALL(VERHOGEN,(int)&swapSemaphore,0,0);
 
     //Return control to the curr proc to retry the instruction that caused the page fault: 
     //LDST on the saved exception state.
