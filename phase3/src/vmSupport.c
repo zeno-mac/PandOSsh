@@ -5,7 +5,7 @@
 
 #include "../../headers/const.h"
 #include "../../headers/types.h"
-#include "../../phase2/src/initial.c"
+#include "../../phase2/headers/initial.h"
 #include "../headers/sysSupport.h"
 #include "../headers/vmSupport.h"
 
@@ -83,7 +83,7 @@ request a NSYS5: int ioStatus = SYSCALL(DOIO, int *commandAddr, int
 commandValue, 0); Where the mnemonic constant DOIO has the value of -5.
 
 */
-int readWriteFlashdrive(int asid, int vpn, int phisicalFrame, int op) {
+void readWriteFlashdrive(int asid, int vpn, int phisicalFrame, int op) {
 
     int block = getFlashBlock(vpn);
     devreg_t *reg = getFlashRegister(asid);
@@ -97,7 +97,13 @@ int readWriteFlashdrive(int asid, int vpn, int phisicalFrame, int op) {
     int ioStatus;
     ioStatus = SYSCALL(DOIO, (int)&(reg->dtp.command), command, 0); //(B)
 
-    // credo ci vada qualcos'altro se status!=1 ossia status!=READY
+    //if status!=READY call the Trap Handler (or do what he would do) !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    if(ioStatus!=1){
+        //programTrapHandler(support_t *sup); 
+        //non avendo i dati per chiamare il trapHandler, rilascio la mutex e termino io il processo
+        SYSCALL(VERHOGEN, (int)&swapSemaphore,0,0);
+        SYSCALL(TERMINATE,0,0,0); 
+    }
 }
 
 // SEZIONE 4.2 - Mazzo
