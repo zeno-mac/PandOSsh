@@ -19,12 +19,12 @@ extern int shellSemaphore;
 /*
 per chi deve scrivere vmsupport.c e implementare pager() e programTrapHandler() è necessario tenere traccia se un processo sta tenendo il mutex del swap pool, in modo da rilasciarlo in caso di terminazione forzata:
 
-int holdingSwapMutex[UPROCMAX] = {0};
+int holdingSwapMutex[UPROCMAX] = {0}; //FATTO, CONRASSEGNATO DA COMMENTO CON "-----------------------"
 
-// dentro pager(), dopo PASSEREN:
+// dentro pager(), dopo PASSEREN: //FATTO, CONRASSEGNATO DA COMMENTO CON "-----------------------"
 holdingSwapMutex[suppPtr->sup_asid - 1] = 1;
 
-// dentro pager(), prima di VERHOGEN:
+// dentro pager(), prima di VERHOGEN: //FATTO, CONRASSEGNATO DA COMMENTO CON "-----------------------"
 holdingSwapMutex[suppPtr->sup_asid - 1] = 0;
 */
 

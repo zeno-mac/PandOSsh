@@ -13,6 +13,9 @@ static swap_t swapPool[POOLSIZE];
 int swapSemaphore;
 extern pcb_t *currProc;
 
+//Forse meglio definirla da un'altra parte?
+int holdingSwapMutex[UPROCMAX] = {0};  //aggiunta per LUCA-----------------------------
+
 void initPagetable(pteEntry_t *pageTable, int asid) {
     for (int i = 0; i < MAXPAGES - 1; i++) {
         pageTable[i].pte_entryHI =
@@ -83,7 +86,7 @@ request a NSYS5: int ioStatus = SYSCALL(DOIO, int *commandAddr, int
 commandValue, 0); Where the mnemonic constant DOIO has the value of -5.
 
 */
-void readWriteFlashdrive(int asid, int vpn, int phisicalFrame, int op) {
+int readWriteFlashdrive(int asid, int vpn, int phisicalFrame, int op) {
 
     int block = getFlashBlock(vpn);
     devreg_t *reg = getFlashRegister(asid);
@@ -94,16 +97,10 @@ void readWriteFlashdrive(int asid, int vpn, int phisicalFrame, int op) {
     // we'll end up un a situation like the following: [0..0][0..0][block][op]
     int command = (block << 8) | op;
 
-    int ioStatus;
-    ioStatus = SYSCALL(DOIO, (int)&(reg->dtp.command), command, 0); //(B)
+    
+    int ioStatus = SYSCALL(DOIO, (int)&(reg->dtp.command), command, 0); //(B)
 
-    //if status!=READY call the Trap Handler (or do what he would do) !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    if(ioStatus!=1){
-        //programTrapHandler(support_t *sup); 
-        //non avendo i dati per chiamare il trapHandler, rilascio la mutex e termino io il processo
-        SYSCALL(VERHOGEN, (int)&swapSemaphore,0,0);
-        SYSCALL(TERMINATE,0,0,0); 
-    }
+   return ioStatus;
 }
 
 // SEZIONE 4.2 - Mazzo
@@ -125,11 +122,12 @@ void pager() {
 
     //Gain mutual exclusion over the Swap Pool table (NSYS3)
     SYSCALL(PASSEREN, (int)&swapSemaphore, 0, 0);
+    holdingSwapMutex[suppPtr->sup_asid - 1] = 1; //Aggiunta per Luca---------------------------
 
     // determine the missing page number: found in the saved exception state’s
     // EntryHi
     int missingPageNo = suppPtr->sup_exceptState[0].entry_hi;
-    missingPageNo = missingPageNo & GETPAGENO;
+    missingPageNo = (missingPageNo & GETPAGENO) >> VPNSHIFT;
 
     // Let's use a FIFO round-robin algorithm fo swap the pages to pick a frame
     // i from the Swap Pool.
@@ -164,8 +162,17 @@ void pager() {
     }
     // Read the contents of the curr proc’s flash device logical page p into
     // frame i
-    readWriteFlashdrive(suppPtr->sup_asid, missingPageNo, physicalFrame,
-                        FLASHREAD);
+
+
+    int ioStatus= readWriteFlashdrive(suppPtr->sup_asid, missingPageNo, physicalFrame, FLASHREAD);
+    if(ioStatus!=1){
+        //if status!=READY call the Trap Handler 
+        holdingSwapMutex[suppPtr->sup_asid - 1] = 0; //Aggiunta per luca----------------------
+        SYSCALL(VERHOGEN,(int)&swapSemaphore,0,0);
+        programTrapHandler(suppPtr);
+    }
+
+
 
     // Update the Swap Pool table’s entry i to reflect frame i’s new contents:
     // page p belonging
@@ -196,6 +203,8 @@ void pager() {
     TLBCLR();
     setSTATUS(status);
 
+
+    holdingSwapMutex[suppPtr->sup_asid - 1] = 0; //Aggiunta per luca----------------------
     //Release mutual exclusion over the Swap Pool table
     SYSCALL(VERHOGEN,(int)&swapSemaphore,0,0);
 
