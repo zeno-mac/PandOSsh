@@ -10,54 +10,8 @@
 #define UPROC_PRIORITY PROCESS_PRIO_LOW
 extern int masterSemaphore;
 extern int shellSemaphore;
-
-/* ==========================================================================
- * VARIABILI ESTERNE — vmSupport.c (Persona 1/2)
- * ========================================================================== */
-
-/*
-per chi deve scrivere vmsupport.c e implementare pager() e programTrapHandler()
-è necessario tenere traccia se un processo sta tenendo il mutex del swap pool,
-in modo da rilasciarlo in caso di terminazione forzata:
-
-int holdingSwapMutex[UPROCMAX] = {0}; //FATTO, CONRASSEGNATO DA COMMENTO CON
-"-----------------------"
-
-// dentro pager(), dopo PASSEREN: //FATTO, CONRASSEGNATO DA COMMENTO CON
-"-----------------------" holdingSwapMutex[suppPtr->sup_asid - 1] = 1;
-
-// dentro pager(), prima di VERHOGEN: //FATTO, CONRASSEGNATO DA COMMENTO CON
-"-----------------------" holdingSwapMutex[suppPtr->sup_asid - 1] = 0;
-*/
-
 extern int holdingSwapMutex[UPROCMAX];
-// serve per syscall terminate, per capire se il
-// processo sta tenendo il mutex del swap pool,
-// in modo da rilasciarlo in caso di
-// terminazione forzata (scritto nella sezione 8
-// nota importante)
 extern int swapSemaphore;
-
-// Quella a seguire farle ma mi serve questo da persona 4:
-
-/* ==========================================================================
- * HELPER I/O TERMINALE
- *
- * Phase 3 usa un solo terminale (devNo = 0), condiviso tra tutti gli U-proc.
- *
- * Due semafori binari (dichiarati in initProc.c) separano lettura e scrittura:
- *   termWriteSemaphore — protegge transm_command / transm_status
- *   termReadSemaphore  — protegge recv_command  / recv_status
- *
- * Indirizzo del terminale: DEV_REG_ADDR(IL_TERMINAL, 0) da uriscv/arch.h.
- *
- * Registri accessibili tramite termreg_t (uriscv/types.h):
- *   recv_status    — bit 7:0 = stato, bit 15:8 = char ricevuto
- *   recv_command   — scrivi RECEIVECHAR (2) per ricevere
- *   transm_status  — bit 7:0 = stato trasmissione
- *   transm_command — scrivi (char<<8)|TRANSMITCHAR per trasmettere
- * ========================================================================== */
-
 extern int termWriteSemaphore;
 extern int termReadSemaphore;
 
@@ -115,11 +69,7 @@ static int readTerminal(char *buf) {
 // TERMINATE
 void sys2(support_t *sup) {
     int asid = sup->sup_asid;
-    /*
-     * rilascia il mutex della Swap Pool se trattenuto.
-     * Il codice originale non lo faceva: questo poteva causare deadlock
-     * se un Program Trap avveniva dentro la sezione critica del Pager.
-     */
+
     if (holdingSwapMutex[asid - 1]) {
         holdingSwapMutex[asid - 1] = 0;
         SYSCALL(VERHOGEN, (int)&swapSemaphore, 0, 0);
