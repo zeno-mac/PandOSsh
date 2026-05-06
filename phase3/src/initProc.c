@@ -15,7 +15,7 @@ int termReadSemaphore;
 
 support_t supportPool[UPROCMAX];
 
-extern void initSwapStructs(void); /* sarà implementata da chi fa vmSupport */
+extern void initSwapPool(void); /* sarà implementata da chi fa vmSupport */
 
 int createUProc(int asid) {
     if (asid <= 0 || asid > UPROCMAX) {
@@ -50,7 +50,7 @@ void test() {
      * Se il tuo compagno non l'ha ancora fatta, puoi commentarla
      * temporaneamente, ma alla fine deve esserci.
      */
-    initSwapStructs();
+    initSwapPool();
 
     /*
      * 3. Crea la shell.
