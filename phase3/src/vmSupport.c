@@ -16,28 +16,40 @@ extern pcb_t *currProc;
 //Forse meglio definirla da un'altra parte?
 int holdingSwapMutex[UPROCMAX] = {0};  //aggiunta per LUCA-----------------------------
 
+//Initialize the page table of U-Proc given the page table and the asi
 void initPagetable(pteEntry_t *pageTable, int asid) {
+    // The first 31 entries are for the .text and .data pages  the logical address space 
     for (int i = 0; i < MAXPAGES - 1; i++) {
-        pageTable[i].pte_entryHI =
-            (KUSEG + (i << VPNSHIFT)) | (asid << ASIDSHIFT);
+        // The VPN field will be from 0x8000 to 0x8001E
+        pageTable[i].pte_entryHI = (KUSEG + (i << VPNSHIFT)) | (asid << ASIDSHIFT);
         pageTable[i].pte_entryLO = DIRTYON;
     }
-
+    // The final entry is for the U-Proc's stack page
     pageTable[31].pte_entryHI = (0xBFFFF << VPNSHIFT) | (asid << ASIDSHIFT);
     // TODO Global set to 1 or 0? Nelle specifiche segna Global set to 1 (off),
-    // che vuol dire?
+    // DIRTYON = each page is write-enabled
+    // GLOBALOFF = the pages are private
+    // VALIDOFF = the entry is not valid
     pageTable[31].pte_entryLO = DIRTYON;
 }
 
 // TODO Spostare in exceptions.c secondo specifiche
+// The the TLB_Refill is called when a logical address translation’s search of the of the TLB for a matching entry fails
+// The TLB-Refill inserts the missing Page Table entry and restart the instruction
 void uTLB_RefillHandler(void) {
     state_t *saved_state = (state_t *)BIOSDATAPAGE;
+
+    // Detrmine the missing TLB entry from the Bios Data Page
     unsigned int missingVPN = (saved_state->entry_hi & GETPAGENO) >> VPNSHIFT;
+    // Get the actual Page Table entry from the Current Process support structure
     pteEntry_t *pageTable = currProc->p_supportStruct->sup_privatePgTbl;
     int pageIndex = missingVPN % MAXPAGES;
+
+    // Write the Page Table entry into the TLB
     setENTRYHI(pageTable[pageIndex].pte_entryHI);
     setENTRYLO(pageTable[pageIndex].pte_entryLO);
     TLBWR();
+    // Return control to the Current Process
     LDST(saved_state);
 }
 
@@ -154,6 +166,7 @@ void pager() {
         // currently cached, it is clearly out of date; it was just updated in
         // the previous step.
         TLBCLR();
+        // TODO Add the improved tlb update once the first test is done
         setSTATUS(status);
 
         // Write the contents of frame i to the correct location on process x’s
