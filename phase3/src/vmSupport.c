@@ -9,8 +9,11 @@
 #include "../headers/sysSupport.h"
 #include "../headers/vmSupport.h"
 
+// PoolSize = (UPROCMAX * 2) = 16 Frames
 static swap_t swapPool[POOLSIZE];
-int swapSemaphore;
+int swapSemaphore = 0;
+
+// TODO remove once Tlb-refill is moved
 extern pcb_t *currProc;
 
 //Forse meglio definirla da un'altra parte?
@@ -53,13 +56,14 @@ void uTLB_RefillHandler(void) {
     LDST(saved_state);
 }
 
+// Initialize the swap pool structure
 void initSwapPool() {
     for (int i = 0; i < POOLSIZE; i++) {
-        swapPool[i].sw_asid = -1;   // -1 = unoccupied
-        swapPool[i].sw_pageNo = -1; // Numero di pagina non valido
+        swapPool[i].sw_asid = -1;   // -1 = The frame is unoccupied
+        swapPool[i].sw_pageNo = -1; // -1 = The page number is non valid
         swapPool[i].sw_pte = NULL;
     }
-    swapSemaphore = 1;
+    SYSCALL(VERHOGEN,(int)&swapSemaphore,0,0);
 }
 
 // SEZIONE 5.1 - Mazzo
