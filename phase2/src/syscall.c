@@ -31,8 +31,8 @@ extern struct list_head semd_h;
  * softBlock_count.
  */
 static int isDeviceSemaphore(int *semAdd) {
-  return (semAdd >= &device_semaphores[0] &&
-          semAdd <= &device_semaphores[NRSEMAPHORES - 1]);
+    return (semAdd >= &device_semaphores[0] &&
+            semAdd <= &device_semaphores[NRSEMAPHORES - 1]);
 }
 
 /*
@@ -46,30 +46,30 @@ static int isDeviceSemaphore(int *semAdd) {
  * and frees the PCB.
  */
 static void terminateProcess(pcb_t *p) {
-  if (p == NULL)
-    return;
+    if (p == NULL)
+        return;
 
-  while (!emptyChild(p)) {
-    terminateProcess(removeChild(p));
-  }
-
-  if (p == currProc) {
-    currProc = NULL;
-
-  } else if (p->p_semAdd != NULL) {
-    outBlocked(p);
-
-    if (isDeviceSemaphore(p->p_semAdd)) {
-      softBlock_count--;
+    while (!emptyChild(p)) {
+        terminateProcess(removeChild(p));
     }
 
-  } else {
-    outProcQ(&readyQueue, p);
-  }
+    if (p == currProc) {
+        currProc = NULL;
 
-  outChild(p);
-  processCount--;
-  freePcb(p);
+    } else if (p->p_semAdd != NULL) {
+        outBlocked(p);
+
+        if (isDeviceSemaphore(p->p_semAdd)) {
+            softBlock_count--;
+        }
+
+    } else {
+        outProcQ(&readyQueue, p);
+    }
+
+    outChild(p);
+    processCount--;
+    freePcb(p);
 }
 
 /*
@@ -78,19 +78,19 @@ static void terminateProcess(pcb_t *p) {
  * Returns a pointer to the matching PCB, or NULL if not found.
  */
 static pcb_t *searchInTree(pcb_t *root, int pid) {
-  if (root == NULL)
-    return NULL;
-  if (root->p_pid == pid)
-    return root;
+    if (root == NULL)
+        return NULL;
+    if (root->p_pid == pid)
+        return root;
 
-  struct list_head *pos;
-  list_for_each(pos, &root->p_child) {
-    pcb_t *child = container_of(pos, pcb_t, p_sib);
-    pcb_t *found = searchInTree(child, pid);
-    if (found != NULL)
-      return found;
-  }
-  return NULL;
+    struct list_head *pos;
+    list_for_each(pos, &root->p_child) {
+        pcb_t *child = container_of(pos, pcb_t, p_sib);
+        pcb_t *found = searchInTree(child, pid);
+        if (found != NULL)
+            return found;
+    }
+    return NULL;
 }
 
 /*
@@ -99,16 +99,16 @@ static pcb_t *searchInTree(pcb_t *root, int pid) {
  * Returns a pointer to the matching PCB, or NULL if not found.
  */
 pcb_t *searchBlockedByPid(int pid) {
-  semd_t *sem;
-  list_for_each_entry(sem, &semd_h, s_link) {
-    struct list_head *pos;
-    list_for_each(pos, &sem->s_procq) {
-      pcb_t *p = container_of(pos, pcb_t, p_list);
-      if (p->p_pid == pid)
-        return p;
+    semd_t *sem;
+    list_for_each_entry(sem, &semd_h, s_link) {
+        struct list_head *pos;
+        list_for_each(pos, &sem->s_procq) {
+            pcb_t *p = container_of(pos, pcb_t, p_list);
+            if (p->p_pid == pid)
+                return p;
+        }
     }
-  }
-  return NULL;
+    return NULL;
 }
 
 /*
@@ -122,28 +122,28 @@ pcb_t *searchBlockedByPid(int pid) {
  */
 static pcb_t *findPcbByPid(int pid) {
 
-  /* Search in the subtree of the currently running process */
-  if (currProc != NULL) {
-    pcb_t *found = searchInTree(currProc, pid);
+    /* Search in the subtree of the currently running process */
+    if (currProc != NULL) {
+        pcb_t *found = searchInTree(currProc, pid);
+        if (found != NULL)
+            return found;
+    }
+
+    /* Search in the subtrees of all ready processes */
+    struct list_head *pos;
+    list_for_each(pos, &readyQueue) {
+        pcb_t *p = container_of(pos, pcb_t, p_list);
+        pcb_t *found = searchInTree(p, pid);
+        if (found != NULL)
+            return found;
+    }
+
+    /* Search among all blocked processes in the ASL */
+    pcb_t *found = searchBlockedByPid(pid);
     if (found != NULL)
-      return found;
-  }
+        return found;
 
-  /* Search in the subtrees of all ready processes */
-  struct list_head *pos;
-  list_for_each(pos, &readyQueue) {
-    pcb_t *p = container_of(pos, pcb_t, p_list);
-    pcb_t *found = searchInTree(p, pid);
-    if (found != NULL)
-      return found;
-  }
-
-  /* Search among all blocked processes in the ASL */
-  pcb_t *found = searchBlockedByPid(pid);
-  if (found != NULL)
-    return found;
-
-  return NULL;
+    return NULL;
 }
 
 /*
@@ -157,27 +157,27 @@ static pcb_t *findPcbByPid(int pid) {
  * Returns: the PID of the new process, or NOPROC (-1) if no PCB is available.
  */
 int nsys1(int a1, int a2, int a3) {
-  state_t *newState = (state_t *)a1;
-  int prio = a2;
-  support_t *supportp = (support_t *)a3;
+    state_t *newState = (state_t *)a1;
+    int prio = a2;
+    support_t *supportp = (support_t *)a3;
 
-  pcb_t *new_pcb = allocPcb();
-  if (new_pcb == NULL)
-    return NOPROC;
-  else {
-    copyState(&new_pcb->p_s, newState);
+    pcb_t *new_pcb = allocPcb();
+    if (new_pcb == NULL)
+        return NOPROC;
+    else {
+        copyState(&new_pcb->p_s, newState);
 
-    new_pcb->p_prio = prio;
-    new_pcb->p_supportStruct = supportp;
-    // Insert into the ready queue (ordered by priority)
-    insertProcQ(&readyQueue, new_pcb);
-    // Make the new process a child of the current process
-    insertChild(currProc, new_pcb);
-    processCount++;
-    new_pcb->p_time = 0;
-    new_pcb->p_semAdd = NULL;
-    return new_pcb->p_pid;
-  }
+        new_pcb->p_prio = prio;
+        new_pcb->p_supportStruct = supportp;
+        // Insert into the ready queue (ordered by priority)
+        insertProcQ(&readyQueue, new_pcb);
+        // Make the new process a child of the current process
+        insertChild(currProc, new_pcb);
+        processCount++;
+        new_pcb->p_time = 0;
+        new_pcb->p_semAdd = NULL;
+        return new_pcb->p_pid;
+    }
 }
 
 /*
@@ -190,21 +190,21 @@ int nsys1(int a1, int a2, int a3) {
  * After termination, calls dispatch() to schedule the next process.
  */
 void nsys2(int a1, state_t *excState) {
-  pcb_t *termPcb = NULL;
+    pcb_t *termPcb = NULL;
 
-  if (a1 == 0) {
-    termPcb = currProc;
-  } else {
-    termPcb = findPcbByPid(a1);
-    if (termPcb == NULL) {
-      excState->reg_a0 = NOPROC;
-      LDST(excState);
-      return;
+    if (a1 == 0) {
+        termPcb = currProc;
+    } else {
+        termPcb = findPcbByPid(a1);
+        if (termPcb == NULL) {
+            excState->reg_a0 = NOPROC;
+            LDST(excState);
+            return;
+        }
     }
-  }
 
-  terminateProcess(termPcb);
-  dispatch();
+    terminateProcess(termPcb);
+    dispatch();
 }
 
 /*
@@ -218,27 +218,27 @@ void nsys2(int a1, state_t *excState) {
  * on the ASL, and call dispatch().
  */
 void nsys3(int a1, state_t *excState) {
-  int *semAdd = (int *)a1;
-  if (*semAdd > 0) {
-    // Semaphore available: decrement and continue execution
-    (*semAdd)--;
-    LDST(excState);
-  } else {
-    /*
-     * Semaphore not available: block the current process.
-     * Save the updated processor state (PC already incremented) into the PCB.
-     */
-    copyState(&currProc->p_s, excState);
+    int *semAdd = (int *)a1;
+    if (*semAdd > 0) {
+        // Semaphore available: decrement and continue execution
+        (*semAdd)--;
+        LDST(excState);
+    } else {
+        /*
+         * Semaphore not available: block the current process.
+         * Save the updated processor state (PC already incremented) into the PCB.
+         */
+        copyState(&currProc->p_s, excState);
 
-    cpu_t currentTime;
-    STCK(currentTime);
-    currProc->p_time += (currentTime - tod_start);
-    insertBlocked(semAdd, currProc);
+        cpu_t currentTime;
+        STCK(currentTime);
+        currProc->p_time += (currentTime - tod_start);
+        insertBlocked(semAdd, currProc);
 
-    currProc = NULL;
-    dispatch();
-  }
-  return;
+        currProc = NULL;
+        dispatch();
+    }
+    return;
 }
 
 /*
@@ -255,15 +255,15 @@ void nsys3(int a1, state_t *excState) {
  * The V operation never blocks the calling process.
  */
 void nsys4(int a1, state_t *excState) {
-  int *semAdd = (int *)a1;
-  pcb_t *unblocked = removeBlocked(semAdd);
+    int *semAdd = (int *)a1;
+    pcb_t *unblocked = removeBlocked(semAdd);
 
-  if (unblocked != NULL) {
-    insertProcQ(&readyQueue, unblocked);
-  } else {
-    (*semAdd)++;
-  }
-  return;
+    if (unblocked != NULL) {
+        insertProcQ(&readyQueue, unblocked);
+    } else {
+        (*semAdd)++;
+    }
+    return;
 }
 
 /*
@@ -276,66 +276,65 @@ void nsys4(int a1, state_t *excState) {
  *
  *   Compute the semaphore index from the command register address
  *   and write the command to the device register.
- *   Increment softBlock_count and block the process on 
+ *   Increment softBlock_count and block the process on
  *   the device semaphore,  then call dispatch().
  */
 void nsys5(int a1, int a2, state_t *excState) {
-  /*
-   * Compute the base address of the device register by zeroing
-   * the last 4 bits (device registers are aligned to 0x10 bytes).
-   */
-  int devRegBase = a1 & 0xFFFFFFF0;
-  // Compute offset from the start of the device register area
-  int offset = devRegBase - START_DEVREG;
-  // Line index: 0=DISK, 1=FLASH, 2=ETH, 3=PRINTER, 4=TERMINAL
-  int lineIndex = offset / 0x80;
-  /* Device number within the line (0..7) */
-  int devNo = (offset % 0x80) / 0x10;
-  // Base semaphore index in device_semaphores[]
-  int semIndex = lineIndex * DEVPERINT + devNo;
-  /*
-   * For terminal devices (lineIndex == 4), distinguish between
-   * receiver and transmitter
-   * Transmission semaphores are stored in the second half
-   * of the terminal semaphore range.
-   */
-  if (lineIndex == 4) {
-    int subDevOffset = a1 - devRegBase;
-    if (subDevOffset == 0xC) {
-      semIndex += DEVPERINT;
-    }
-  }
+    /*
+     * a1 è l'indirizzo del COMMAND register, non necessariamente
+     * allineato a 0x10 rispetto a zero.
+     *
+     * I device register partono da START_DEVREG = 0x10000054,
+     * quindi bisogna calcolare l'offset relativo a START_DEVREG,
+     * non mascherare gli ultimi 4 bit dell'indirizzo assoluto.
+     */
+    int offset = a1 - START_DEVREG;
 
-  int *semAdd = &device_semaphores[semIndex];
+    int regIndex = offset / DEVREGSIZE;    /* quale device register */
+    int fieldOffset = offset % DEVREGSIZE; /* quale campo dentro il device */
+
+    int lineIndex = regIndex / DEVPERINT; /* 0=disk, 1=flash, ..., 4=terminal */
+    int devNo = regIndex % DEVPERINT;
+
+    int semIndex = lineIndex * DEVPERINT + devNo;
+
+    /*
+     * Terminale:
+     * recv_command  è offset 0x4
+     * transm_command è offset 0xC
+     */
+    if (lineIndex == 4 && fieldOffset == 0xC) {
+        semIndex += DEVPERINT;
+    }
+
+    int *semAdd = &device_semaphores[semIndex];
 
     copyState(&currProc->p_s, excState);
-  cpu_t currentTime;
-  STCK(currentTime);
-  currProc->p_time += (currentTime - tod_start);
 
-  softBlock_count++;
+    cpu_t currentTime;
+    STCK(currentTime);
+    currProc->p_time += (currentTime - tod_start);
 
-  insertBlocked(semAdd, currProc);
+    softBlock_count++;
 
-  currProc = NULL;
-  *((int *)a1) = a2;
+    insertBlocked(semAdd, currProc);
 
-  dispatch();
+    currProc = NULL;
 
-  return;
-}
+    *((int *)a1) = a2;
 
-/*
- * NSYS6 — GetCPUTime
- *
- * Returns the total accumulated CPU time used by the current process,
- * including time elapsed during the current time quantum.
- */
+    dispatch();
+} /*
+   * NSYS6 — GetCPUTime
+   *
+   * Returns the total accumulated CPU time used by the current process,
+   * including time elapsed during the current time quantum.
+   */
 void nsys6(state_t *excState) {
-  cpu_t currentTime;
-  STCK(currentTime);
+    cpu_t currentTime;
+    STCK(currentTime);
 
-  excState->reg_a0 = currProc->p_time + (currentTime - tod_start);
+    excState->reg_a0 = currProc->p_time + (currentTime - tod_start);
 }
 
 /*
@@ -346,19 +345,19 @@ void nsys6(state_t *excState) {
  * by the Interval Timer interrupt handler every 100 milliseconds.
  */
 void nsys7(state_t *excState) {
-  int *pseudoClockSem = &device_semaphores[NSUPPSEM];
-  copyState(&currProc->p_s, excState);
+    int *pseudoClockSem = &device_semaphores[NSUPPSEM];
+    copyState(&currProc->p_s, excState);
 
-  cpu_t currentTime;
-  STCK(currentTime);
-  currProc->p_time += (currentTime - tod_start);
+    cpu_t currentTime;
+    STCK(currentTime);
+    currProc->p_time += (currentTime - tod_start);
 
-  softBlock_count++;
-  insertBlocked(pseudoClockSem, currProc);
+    softBlock_count++;
+    insertBlocked(pseudoClockSem, currProc);
 
-  currProc = NULL;
-  dispatch();
-  return;
+    currProc = NULL;
+    dispatch();
+    return;
 }
 
 /*
@@ -368,8 +367,8 @@ void nsys7(state_t *excState) {
  * If no Support Structure was assigned at creation time, returns NULL.
  */
 void nsys8(state_t *excState) {
-  excState->reg_a0 = (int)currProc->p_supportStruct;
-  return;
+    excState->reg_a0 = (int)currProc->p_supportStruct;
+    return;
 }
 
 /*
@@ -380,14 +379,14 @@ void nsys8(state_t *excState) {
  *   a1 != 0: return PID of the parent process (0 if no parent)
  */
 void nsys9(int a1, state_t *excState) {
-  if (a1 == 0) {
-    excState->reg_a0 = currProc->p_pid;
-  } else {
-    if (currProc->p_parent == NULL)
-      excState->reg_a0 = 0;
-    else
-      excState->reg_a0 = currProc->p_parent->p_pid;
-  }
+    if (a1 == 0) {
+        excState->reg_a0 = currProc->p_pid;
+    } else {
+        if (currProc->p_parent == NULL)
+            excState->reg_a0 = 0;
+        else
+            excState->reg_a0 = currProc->p_parent->p_pid;
+    }
 }
 
 /*
@@ -398,16 +397,16 @@ void nsys9(int a1, state_t *excState) {
  * and dispatch() is called to schedule the next process.
  */
 void nsys10(state_t *excState) {
-  copyState(&currProc->p_s, excState);
+    copyState(&currProc->p_s, excState);
 
-  cpu_t currentTime;
-  STCK(currentTime);
-  currProc->p_time += (currentTime - tod_start);
-  
-  pcb_t * old_head = removeProcQ(&readyQueue);
-  insertProcQ(&readyQueue, currProc);
-  list_add(&(old_head->p_list), &readyQueue);
-  currProc = NULL;
-  dispatch();
-  return;
+    cpu_t currentTime;
+    STCK(currentTime);
+    currProc->p_time += (currentTime - tod_start);
+
+    pcb_t *old_head = removeProcQ(&readyQueue);
+    insertProcQ(&readyQueue, currProc);
+    list_add(&(old_head->p_list), &readyQueue);
+    currProc = NULL;
+    dispatch();
+    return;
 }
