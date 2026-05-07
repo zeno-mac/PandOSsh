@@ -9,6 +9,10 @@
 #include "../headers/sysSupport.h"
 #include "../headers/vmSupport.h"
 
+#define FLASH_LINE_NO 4
+
+
+
 // PoolSize = (UPROCMAX * 2) = 16 Frames
 static swap_t swapPool[POOLSIZE];
 int swapSemaphore = 0;
@@ -84,9 +88,10 @@ int getFlashBlock(int vpn) {
 // segue che i registi vanno da 0..7 = (1..8)-1
 devreg_t *getFlashRegister(int asid) {
     int devNo = asid - 1;
+    if (devNo < 0 || devNo >= UPROCMAX) return NULL;
 
     // segue tabella per gestione interrupt implementata in phase2
-    int devRegister = START_DEVREG + ((IL_FLASH - 3) * 0x80) + (devNo * 0x10);
+    int devRegister = START_DEVREG + ((FLASH_LINE_NO - 3) * 0x80) + (devNo * 0x10);
 
     return ((devreg_t *)devRegister);
 }
@@ -106,6 +111,10 @@ int readWriteFlashdrive(int asid, int vpn, int phisicalFrame, int op) {
 
     int block = getFlashBlock(vpn);
     devreg_t *reg = getFlashRegister(asid);
+
+    if (block < 0 || block >= MAXPAGES || reg == NULL) {
+        return -1; 
+    }
 
     reg->dtp.data0 = phisicalFrame; //(A)
 
@@ -143,7 +152,7 @@ void pager() {
     // determine the missing page number: found in the saved exception state’s
     // EntryHi
     int missingPageNo = suppPtr->sup_exceptState[0].entry_hi;
-    missingPageNo = (missingPageNo & GETPAGENO) >> VPNSHIFT;
+    missingPageNo = (missingPageNo & (GETSHAREFLAG | GETPAGENO)) >> VPNSHIFT;
 
     // Let's use a FIFO round-robin algorithm fo swap the pages to pick a frame
     // i from the Swap Pool.
