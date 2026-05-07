@@ -1,5 +1,6 @@
-build/
+*build/
 .vscode/
 .DS_Store
 *.uriscv
 *.img
+*.o
