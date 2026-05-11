@@ -211,11 +211,9 @@ void pager() {
     //  blocco 31 <=> vpn 0xBFFFF
     //  blocchi[0..30] <=> vpn 0x80000,0x80001,..,0x8001E
     //  quindi per vpn=0x80002 il blocco è il 2
-    int pageIdx;
-    if (missingPageNo == 0xBFFFF) // Entry 31: pagina stack (VPN 0xBFFFF)
-        pageIdx = 31;
-    else
-        pageIdx = missingPageNo - 0x80000; // pageNo-baseAddrDellePage
+    int pageIdx=getFlashBlock(missingPageNo);
+    
+
 
     int status = getSTATUS();
     setSTATUS(status & ~MSTATUS_MIE_MASK);
