@@ -22,32 +22,20 @@ Le variabili globali e le strutture definite nel modulo sono:
 \begin{itemize}
     \item \texttt{swapPool}: Array di tipo \texttt{swap\_t} e di dimensione \texttt{POOLSIZE} (pari a \texttt{UPROCMAX * 2}, ovvero 16 frame) che rappresenta la tabella della Swap Pool per allocare le pagine in memoria fisica.
     \item \texttt{swapSemaphore}: Semaforo utilizzato per garantire la mutua esclusione della Swap Pool tra i vari processi.
-    \item \texttt{holdingSwapMutex}: Array che tiene traccia, tramite indice basato sull'ASID, di quale processo possiede attualmente il mutex per lo swap.
+    \item \texttt{holdingSwapMutex}: Cella di un'array che tiene traccia, tramite indice basato sull'ASID, di quale processo possiede attualmente il mutex per lo swap.
 \end{itemize}
 
 \vspace{0.5cm}
 \subsection{Descrizione delle Funzioni}
 
 \subsubsection{\texttt{void initPagetable(pteEntry\_t *pageTable, int asid)}}
-\begin{enumerate}
-    \item Inizializza la Page Table del processo utente (U-Proc) assegnando l'ASID specificato.
-    \item Le prime 31 entrate della tabella (indici da 0 a 30) vengono mappate per le pagine \texttt{.text} e \texttt{.data}, con un Virtual Page Number (VPN) compreso tra 0x8000 e 0x8001E, e i permessi di scrittura abilitati tramite \texttt{DIRTYON}.
-    \item L'ultima entrata (indice 31) viene riservata alla pagina di stack dell'U-Proc (VPN 0xBFFFF), anch'essa abilitata in scrittura.
-\end{enumerate}
+
 
 \subsubsection{\texttt{void uTLB\_RefillHandler(void)}}
-\begin{enumerate}
-    \item Funzione invocata quando la traduzione di un indirizzo logico nel TLB fallisce.
-    \item Determina il VPN mancante prelevandolo dal campo \texttt{entry\_hi} dello stato salvato all'interno della Bios Data Page.
-    \item Recupera la Page Table dalla struttura di supporto del processo corrente (\texttt{currProc}) e individua l'entrata corretta calcolando l'indice della pagina.
-    \item Scrive l'entrata nel TLB aggiornando \texttt{ENTRYHI} e \texttt{ENTRYLO} tramite l'istruzione \texttt{TLBWR}, per poi restituire il controllo al processo riavviando l'istruzione.
-\end{enumerate}
+
 
 \subsubsection{\texttt{void initSwapPool()}}
-\begin{enumerate}
-    \item Inizializza ogni frame della Swap Pool impostando \texttt{sw\_asid = -1} (frame libero), \texttt{sw\_pageNo = -1} (numero di pagina non valido) e il puntatore \texttt{sw\_pte} a \texttt{NULL}.
-    \item Rilascia il semaforo \texttt{swapSemaphore} eseguendo una \texttt{SYSCALL(VERHOGEN)} su di esso per renderlo disponibile.
-\end{enumerate}
+
 
 \subsubsection{\texttt{int getFlashBlock(int vpn)} e \texttt{devreg\_t *getFlashRegister(int asid)}}
 \begin{enumerate}
@@ -58,20 +46,20 @@ Le variabili globali e le strutture definite nel modulo sono:
 \subsubsection{\texttt{int readWriteFlashdrive(int asid, int vpn, int phisicalFrame, int op)}}
 \begin{enumerate}
     \item Ricava il numero di blocco logico dal VPN e il registro corretto del Flash Device associato al processo tramite il suo ASID.
-    \item Scrive l'indirizzo del frame fisico iniziale da 4KB all'interno del campo \texttt{DATA0} del device.
+    \item Scrive l'indirizzo del frame fisico iniziale  all'interno del campo \texttt{DATA0} del device.
     \item Costruisce il comando unendo il numero del blocco (shiftato di 8 bit) con il codice operativo (\texttt{op}), per poi inviare una richiesta sincrona sul campo \texttt{COMMAND} tramite una \texttt{SYSCALL(DOIO)}.
 \end{enumerate}
 
 \subsubsection{\texttt{void pager()}}
 \begin{enumerate}
     \item Recupera il puntatore alla struttura di supporto del processo tramite \texttt{SYSCALL(GETSUPPORTPTR)} e verifica la causa del TLB fault dall'eccezione salvata.
-    \item Se l'eccezione è di tipo \texttt{TLB-Mod} (modifica di pagina in sola lettura), il comportamento viene dirottato al gestore delle Program Trap.
+    \item Se l'eccezione è di tipo \texttt{TLB-Mod} (modifica), il comportamento viene dirottato al gestore delle Program Trap.
     \item Acquisisce il mutex sulla Swap Pool tramite \texttt{PASSEREN} su \texttt{swapSemaphore} e aggiorna il tracker locale \texttt{holdingSwapMutex}.
     \item Sceglie un frame dalla Swap Pool utilizzando un algoritmo FIFO di tipo round-robin per rimpiazzare una pagina.
-    \item Se il frame è occupato da una pagina valida (controllando se \texttt{sw\_asid $\neq$ -1}), la invalida rimuovendo il flag \texttt{VALIDON} dalla sua Page Table, svuota il TLB e salva il vecchio contenuto nel rispettivo Flash Device tramite \texttt{FLASHWRITE}.
-    \item Legge la nuova pagina dal Flash Device del processo corrente e la carica nel frame fisico scelto tramite un'operazione di \texttt{FLASHREAD}. In caso di errore durante l'I/O, rilascia il semaforo e genera una Program Trap.
+    \item Se il frame è occupato da una pagina valida, la invalida rimuovendo il flag \texttt{VALIDON} dalla sua Page Table, svuota il TLB e salva il vecchio contenuto nel rispettivo Flash Device tramite \texttt{FLASHWRITE}.
+    \item Legge la nuova pagina dal Flash Device del processo corrente e la carica nel frame fisico scelto tramite \texttt{FLASHREAD}. In caso di errore durante l'I/O, rilascia il semaforo e genera una Program Trap.
     \item Aggiorna l'entry della Swap Pool salvando il nuovo ASID, il numero di pagina (\texttt{missingPageNo}) e ricavando l'indirizzo della rispettiva entry nella Page Table.
     \item Modifica l'entry della Page Table appena trovata unendo l'indirizzo fisico del frame e impostando i flag \texttt{DIRTYON} e \texttt{VALIDON}.
-    \item Invalida nuovamente il TLB per scongiurare entry obsolete, rilascia l'uso del semaforo su \texttt{swapSemaphore} (resettando anche \texttt{holdingSwapMutex}) e restituisce il controllo ricaricando lo stato per tentare nuovamente l'istruzione \texttt{LDST}.
+    \item Rilascia l'uso del semaforo su \texttt{swapSemaphore} (resettando anche \texttt{holdingSwapMutex}) e restituisce il controllo ricaricando lo stato per tentare nuovamente l'istruzione \texttt{LDST}.
 \end{enumerate}
 \end{document}
