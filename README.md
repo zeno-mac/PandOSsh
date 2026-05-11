@@ -129,6 +129,27 @@ As we already stated, this module ( file <b>syscall.c</b>) contains the implemen
 <li><b>void nsys10(state_t *excState)</b>: the process calling this procedure decides to yield, which means to release the use of the CPU in his current time slice;
 </ul>
 
+# PandOSsh Phase 3
+
+The <b>Phase 3</b> implementation is located in the directory whose name is <b>phase3/</b>. Additionlay the test files are found in the <b>tetsers/</b> folder.
+
+## Virtual Memory Support
+The <b>vmSupport</b> module contains the procedures to manage the virtual memory and the Support Level's TLB exception. Though the pager it handles page faults and loads missing pages from flash devices into the physical
+frame, maintaining the Swap Pool. The main data structure of this module is the <b>swapPool[POOLSIZE]</b>: Each entry (`swap_t`) tracks the physical frame allocation, containing the ASID of the owner, the logical page number, and a pointer to the corresponding Page Table entry.
+
+The functions that this module provides are the following:
+<ul>
+<li><b>void initPagetable(pteEntry_t *pageTable, int asid)</b>: Maps the first 31 page table entries to the code/data segments and the last to the stack.
+<li><b>void uTLB_RefillHandler(void)</b>: Handles TLB misses by loading the correct page table entry into the TLB and resuming execution.
+<li><b>void initSwapPool()</b>: Marks all swap frames as free and invalidates page numbers and ASIDs.
+<li><b>int getFlashBlock(int vpn)</b>: Computes the Flash Device block corresponding to a given virtual page number.
+<li><b>devreg_t *getFlashRegister(int asid)</b>: Returns the memory address of the Flash Device registers for a U-Proc based on its ASID.
+<li><b>int readWriteFlashdrive(int asid, int vpn, int phisicalFrame, int op)</b>: Translates VPN to a block, sets the frame address, and performs the read/write syscall.
+<li><b>void pager()</b>: Handles page faults by selecting a swap frame, writing back if dirty, loading the missing page, updating the page table and TLB, and managing access with a semaphore.
+</ul>
+
+
+
 # Compiling and running
 
 To compile and run the project using cmake follow these instructions using the terminal:<br>
