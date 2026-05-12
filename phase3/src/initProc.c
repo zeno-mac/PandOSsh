@@ -4,7 +4,8 @@
 #include "../headers/helpers.h"
 
 #include <uriscv/liburiscv.h>
-
+extern void klog_print(char *str);
+extern void klog_print_hex(unsigned int num);
 #define UPROC_PRIORITY PROCESS_PRIO_LOW
 
 int masterSemaphore;
@@ -33,7 +34,6 @@ int createUProc(int asid) {
 }
 
 void test() {
-
     int pid;
 
     masterSemaphore = 0;
@@ -51,13 +51,11 @@ void test() {
      * temporaneamente, ma alla fine deve esserci.
      */
     initSwapPool();
-
     /*
      * 3. Crea la shell.
      * Per convenzione nel tuo header SHELL_ASID = 1.
      */
     pid = createUProc(SHELL_ASID);
-
     if (pid == NOPROC) {
         PANIC();
     }
@@ -66,11 +64,14 @@ void test() {
      * 4. Aspetta che la shell termini.
      * La shell, quando termina con SYS2, dovrà fare V(masterSemaphore).
      */
+    klog_print("before P\n");
     SYSCALL(PASSEREN, (int)&masterSemaphore, 0, 0);
 
     /*
      * 5. Termina l'InstantiatorProcess.
      * Essendo test in kernel mode, qui si usa la syscall negativa del nucleo.
      */
+    klog_print("after P\n");
     SYSCALL(TERMPROCESS, 0, 0, 0);
+    klog_print("end test\n");
 }

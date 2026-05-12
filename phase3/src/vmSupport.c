@@ -8,10 +8,10 @@
 #include "../../phase2/headers/initial.h"
 #include "../headers/sysSupport.h"
 #include "../headers/vmSupport.h"
-
+extern void klog_print(char *str);
+extern void klog_print_hex(unsigned int num);
+extern void klog_print_dec(unsigned int num);
 #define FLASH_LINE_NO 4
-
-
 
 // PoolSize = (UPROCMAX * 2) = 16 Frames
 static swap_t swapPool[POOLSIZE];
@@ -20,12 +20,12 @@ int swapSemaphore = 0;
 // TODO remove once Tlb-refill is moved
 extern pcb_t *currProc;
 
-//Forse meglio definirla da un'altra parte?
-int holdingSwapMutex[UPROCMAX] = {0};  //aggiunta per LUCA-----------------------------
+// Forse meglio definirla da un'altra parte?
+int holdingSwapMutex[UPROCMAX] = {0}; // aggiunta per LUCA-----------------------------
 
-//Initialize the page table of U-Proc given the page table and the asi
+// Initialize the page table of U-Proc given the page table and the asi
 void initPagetable(pteEntry_t *pageTable, int asid) {
-    // The first 31 entries are for the .text and .data pages  the logical address space 
+    // The first 31 entries are for the .text and .data pages  the logical address space
     for (int i = 0; i < MAXPAGES - 1; i++) {
         // The VPN field will be from 0x8000 to 0x8001E
         pageTable[i].pte_entryHI = (KUSEG + (i << VPNSHIFT)) | (asid << ASIDSHIFT);
@@ -44,19 +44,32 @@ void initPagetable(pteEntry_t *pageTable, int asid) {
 // The the TLB_Refill is called when a logical address translation’s search of the of the TLB for a matching entry fails
 // The TLB-Refill inserts the missing Page Table entry and restart the instruction
 void uTLB_RefillHandler(void) {
+    klog_print("TLB refill start\n");
+
     state_t *saved_state = (state_t *)BIOSDATAPAGE;
 
-    // Detrmine the missing TLB entry from the Bios Data Page
+    klog_print("TLB entryhi=");
+    klog_print_hex(saved_state->entry_hi);
+    klog_print("\n");
+
     unsigned int missingVPN = (saved_state->entry_hi & GETPAGENO) >> VPNSHIFT;
-    // Get the actual Page Table entry from the Current Process support structure
+
+    klog_print("TLB vpn=");
+    klog_print_hex(missingVPN);
+    klog_print("\n");
+
     pteEntry_t *pageTable = currProc->p_supportStruct->sup_privatePgTbl;
     int pageIndex = missingVPN % MAXPAGES;
 
-    // Write the Page Table entry into the TLB
+    klog_print("TLB idx=");
+    klog_print_dec(pageIndex);
+    klog_print("\n");
+
     setENTRYHI(pageTable[pageIndex].pte_entryHI);
     setENTRYLO(pageTable[pageIndex].pte_entryLO);
     TLBWR();
-    // Return control to the Current Process
+
+    klog_print("TLB before LDST\n");
     LDST(saved_state);
 }
 
@@ -67,7 +80,7 @@ void initSwapPool() {
         swapPool[i].sw_pageNo = -1; // -1 = The page number is non valid
         swapPool[i].sw_pte = NULL;
     }
-    SYSCALL(VERHOGEN,(int)&swapSemaphore,0,0);
+    SYSCALL(VERHOGEN, (int)&swapSemaphore, 0, 0);
 }
 
 // SEZIONE 5.1 - Mazzo
@@ -88,7 +101,8 @@ int getFlashBlock(int vpn) {
 // segue che i registi vanno da 0..7 = (1..8)-1
 devreg_t *getFlashRegister(int asid) {
     int devNo = asid - 1;
-    if (devNo < 0 || devNo >= UPROCMAX) return NULL;
+    if (devNo < 0 || devNo >= UPROCMAX)
+        return NULL;
 
     // segue tabella per gestione interrupt implementata in phase2
     int devRegister = START_DEVREG + ((FLASH_LINE_NO - 3) * 0x80) + (devNo * 0x10);
@@ -108,53 +122,80 @@ commandValue, 0); Where the mnemonic constant DOIO has the value of -5.
 
 */
 int readWriteFlashdrive(int asid, int vpn, int phisicalFrame, int op) {
+    klog_print("flash rw start\n");
+
+    klog_print("asid=");
+    klog_print_dec(asid);
+    klog_print(" vpn=");
+    klog_print_hex(vpn);
+    klog_print(" frame=");
+    klog_print_hex(phisicalFrame);
+    klog_print(" op=");
+    klog_print_dec(op);
+    klog_print("\n");
 
     int block = getFlashBlock(vpn);
     devreg_t *reg = getFlashRegister(asid);
 
+    klog_print("flash block=");
+    klog_print_dec(block);
+    klog_print(" reg=");
+    klog_print_hex((unsigned int)reg);
+    klog_print("\n");
+
     if (block < 0 || block >= MAXPAGES || reg == NULL) {
-        return -1; 
+        klog_print("flash invalid params\n");
+        return -1;
     }
 
-    reg->dtp.data0 = phisicalFrame; //(A)
+    reg->dtp.data0 = phisicalFrame;
 
-    // let's shift "block" up by 8bits(his size) so "op" can occupy the 4th byte
-    // we'll end up un a situation like the following: [0..0][0..0][block][op]
     int command = (block << 8) | op;
 
-    
-    int ioStatus = SYSCALL(DOIO, (int)&(reg->dtp.command), command, 0); //(B)
+    klog_print("before DOIO flash\n");
+    int ioStatus = SYSCALL(DOIO, (int)&(reg->dtp.command), command, 0);
+    klog_print("after DOIO flash status=");
+    klog_print_dec(ioStatus);
+    klog_print("\n");
 
-   return ioStatus;
+    return ioStatus;
 }
 
 // SEZIONE 4.2 - Mazzo
 
 void pager() {
-    // Obtain the pointer to the Current Process’s Support Structure: NSYS8.
-    support_t *suppPtr = (support_t *)SYSCALL(
-        GETSUPPORTPTR, 0, 0, 0); // Forse non serve casting a (support_t *)
+    klog_print("pager start\n");
 
-    // Determine the cause of the TLB exception. The saved exception state
-    // responsible for this TLB exception should be found in
-    // sup_exceptState[0]’s Cause register.
-    int cause = suppPtr->sup_exceptState[0].cause;
-    cause = (cause & GETEXECCODE) >> CAUSESHIFT;
+    support_t *suppPtr = (support_t *)SYSCALL(GETSUPPORTPTR, 0, 0, 0);
 
-    // if the Cause is a TLB-Mod exception, treat it as a program trap.
-    if (cause == EXC_MOD)
+    klog_print("pager after getsupport asid=");
+    klog_print_dec(suppPtr->sup_asid);
+    klog_print("\n");
+
+    int cause = suppPtr->sup_exceptState[PGFAULTEXCEPT].cause;
+    cause = cause & CAUSE_EXCCODE_MASK;
+
+    klog_print("pager cause=");
+    klog_print_dec(cause);
+    klog_print("\n");
+
+    if (cause == EXC_MOD) {
+        klog_print("pager EXC_MOD\n");
         programTrapHandler(suppPtr);
+    }
 
-    //Gain mutual exclusion over the Swap Pool table (NSYS3)
+    klog_print("before swap P\n");
     SYSCALL(PASSEREN, (int)&swapSemaphore, 0, 0);
-    holdingSwapMutex[suppPtr->sup_asid - 1] = 1; //Aggiunta per Luca---------------------------
+    klog_print("after swap P\n");
 
-    // determine the missing page number: found in the saved exception state’s
-    // EntryHi
-    int missingPageNo = suppPtr->sup_exceptState[0].entry_hi;
+    holdingSwapMutex[suppPtr->sup_asid - 1] = 1;
+
+    int missingPageNo = suppPtr->sup_exceptState[PGFAULTEXCEPT].entry_hi;
     missingPageNo = (missingPageNo & (GETSHAREFLAG | GETPAGENO)) >> VPNSHIFT;
 
-    // Let's use a FIFO round-robin algorithm fo swap the pages to pick a frame
+    klog_print("missing page=");
+    klog_print_hex(missingPageNo);
+    klog_print("\n"); // Let's use a FIFO round-robin algorithm fo swap the pages to pick a frame
     // i from the Swap Pool.
     static int fifoCont = 0;
     int i = fifoCont;
@@ -189,17 +230,21 @@ void pager() {
     // Read the contents of the curr proc’s flash device logical page p into
     // frame i
 
+    int ioStatus = readWriteFlashdrive(suppPtr->sup_asid, missingPageNo, physicalFrame, FLASHREAD);
 
-    int ioStatus= readWriteFlashdrive(suppPtr->sup_asid, missingPageNo, physicalFrame, FLASHREAD);
-    if(ioStatus!=1){
-        //if status!=READY call the Trap Handler 
-        holdingSwapMutex[suppPtr->sup_asid - 1] = 0; //Aggiunta per luca----------------------
-        SYSCALL(VERHOGEN,(int)&swapSemaphore,0,0);
+    klog_print("before flash read\n");
+
+    if (ioStatus != 1) {
+        // if status!=READY call the Trap Handler
+        holdingSwapMutex[suppPtr->sup_asid - 1] = 0; // Aggiunta per luca----------------------
+        SYSCALL(VERHOGEN, (int)&swapSemaphore, 0, 0);
         programTrapHandler(suppPtr);
     }
+    klog_print("after flash read\n");
 
-
-
+    klog_print("ioStatus=");
+    klog_print_dec(ioStatus);
+    klog_print("\n");
     // Update the Swap Pool table’s entry i to reflect frame i’s new contents:
     // page p belonging
     //  to the curr proc's ASID, and a ptr to the curr proc's Page Table entry
@@ -227,11 +272,10 @@ void pager() {
     TLBCLR();
     setSTATUS(status);
 
-
-    holdingSwapMutex[suppPtr->sup_asid - 1] = 0; //Aggiunta per luca----------------------
-    //Release mutual exclusion over the Swap Pool table
-    SYSCALL(VERHOGEN,(int)&swapSemaphore,0,0);
-
+    holdingSwapMutex[suppPtr->sup_asid - 1] = 0; // Aggiunta per luca----------------------
+    // Release mutual exclusion over the Swap Pool table
+    SYSCALL(VERHOGEN, (int)&swapSemaphore, 0, 0);
+    klog_print("pager before final LDST\n");
     // Return control to the curr proc to retry the instruction that caused the
     // page fault: LDST on the saved exception state.
     LDST(&suppPtr->sup_exceptState[0]);
