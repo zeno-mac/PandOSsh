@@ -8,9 +8,7 @@
 #include "../../phase2/headers/initial.h"
 #include "../headers/sysSupport.h"
 #include "../headers/vmSupport.h"
-extern void klog_print(char *str);
-extern void klog_print_hex(unsigned int num);
-extern void klog_print_dec(unsigned int num);
+
 #define FLASH_LINE_NO 4
 
 // PoolSize = (UPROCMAX * 2) = 16 Frames
@@ -18,7 +16,7 @@ swap_t swapPool[POOLSIZE];
 int swapSemaphore = 0;
 
 // Forse meglio definirla da un'altra parte?
-int holdingSwapMutex[UPROCMAX] = {0}; // aggiunta per LUCA-----------------------------
+int holdingSwapMutex[UPROCMAX] = {0};
 
 // Initialize the page table of U-Proc given the page table and the asi
 void initPagetable(pteEntry_t *pageTable, int asid)
@@ -93,42 +91,20 @@ commandValue, 0); Where the mnemonic constant DOIO has the value of -5.
 */
 int readWriteFlashdrive(int asid, int vpn, int phisicalFrame, int op)
 {
-    klog_print("flash rw start\n");
-
-    klog_print("asid=");
-    klog_print_dec(asid);
-    klog_print(" vpn=");
-    klog_print_hex(vpn);
-    klog_print(" frame=");
-    klog_print_hex(phisicalFrame);
-    klog_print(" op=");
-    klog_print_dec(op);
-    klog_print("\n");
-
     int block = getFlashBlock(vpn);
     devreg_t *reg = getFlashRegister(asid);
 
-    klog_print("flash block=");
-    klog_print_dec(block);
-    klog_print(" reg=");
-    klog_print_hex((unsigned int)reg);
-    klog_print("\n");
-
     if (block < 0 || block >= MAXPAGES || reg == NULL)
     {
-        klog_print("flash invalid params\n");
         return -1;
     }
 
     reg->dtp.data0 = phisicalFrame;
-
+    // let's shift "block" up by 8bits(his size) so "op" can occupy the 4th byte
+    // we'll end up un a situation like the following: [0..0][0..0][block][op]
     int command = (block << 8) | op;
 
-    klog_print("before DOIO flash\n");
     int ioStatus = SYSCALL(DOIO, (int)&(reg->dtp.command), command, 0);
-    klog_print("after DOIO flash status=");
-    klog_print_dec(ioStatus);
-    klog_print("\n");
 
     return ioStatus;
 }
@@ -137,41 +113,27 @@ int readWriteFlashdrive(int asid, int vpn, int phisicalFrame, int op)
 
 void pager()
 {
-    klog_print("pager start\n");
-
+    // Obtain the pointer to the Current Process’s Support Structure: NSYS8.
     support_t *suppPtr = (support_t *)SYSCALL(GETSUPPORTPTR, 0, 0, 0);
-
-    klog_print("pager after getsupport asid=");
-    klog_print_dec(suppPtr->sup_asid);
-    klog_print("\n");
-
+    // Determine the cause of the TLB exception. The saved exception state
+    // responsible for this TLB exception should be found in
+    // sup_exceptState[0]’s Cause register
     int cause = suppPtr->sup_exceptState[PGFAULTEXCEPT].cause;
     cause = cause & CAUSE_EXCCODE_MASK;
 
-    klog_print("pager cause=");
-    klog_print_dec(cause);
-    klog_print("\n");
-
+    // if the Cause is a TLB-Mod exception, treat it as a program trap.
     if (cause == EXC_MOD)
     {
-        klog_print("pager EXC_MOD\n");
         programTrapHandler(suppPtr);
     }
 
-    klog_print("before swap P\n");
+    //Gain mutual exclusion over the Swap Pool table (NSYS3)
     SYSCALL(PASSEREN, (int)&swapSemaphore, 0, 0);
-    klog_print("after swap P\n");
-
     holdingSwapMutex[suppPtr->sup_asid - 1] = 1;
-
+    // determine the missing page number: found in the saved exception state’s
+    // EntryHi
     int missingPageNo = suppPtr->sup_exceptState[PGFAULTEXCEPT].entry_hi;
     missingPageNo = (missingPageNo & (GETSHAREFLAG | GETPAGENO)) >> VPNSHIFT;
-
-    klog_print("missing page=");
-    klog_print_hex(missingPageNo);
-    klog_print("\n"); // Let's use a FIFO round-robin algorithm fo swap the pages to pick a frame
-    // i from the Swap Pool.
-    
 
     /*First check for an unoccupied frame before selecting an occupied frame to use.
      This will turn an O(1) operation into an O(n) operation in exchange for fewer I/O (write) operations. */
@@ -182,12 +144,13 @@ void pager()
             break;
         }
     }
+    // Let's use a FIFO round-robin algorithm fo swap the pages to pick a frame
+    // i from the Swap Pool.
     static int fifoCont = 0;
     if(i==-1){
         i = fifoCont;
         fifoCont = (fifoCont + 1) % POOLSIZE;
     }
-
 
     int physicalFrame = FLASHPOOLSTART + (i * PAGESIZE);
 
@@ -229,8 +192,6 @@ void pager()
 
     int ioStatus = readWriteFlashdrive(suppPtr->sup_asid, missingPageNo, physicalFrame, FLASHREAD);
 
-    klog_print("before flash read\n");
-
     if (ioStatus != 1)
     {
         // if status!=READY call the Trap Handler
@@ -238,11 +199,7 @@ void pager()
         SYSCALL(VERHOGEN, (int)&swapSemaphore, 0, 0);
         programTrapHandler(suppPtr);
     }
-    klog_print("after flash read\n");
 
-    klog_print("ioStatus=");
-    klog_print_dec(ioStatus);
-    klog_print("\n");
     // Update the Swap Pool table’s entry i to reflect frame i’s new contents:
     // page p belonging
     //  to the curr proc's ASID, and a ptr to the curr proc's Page Table entry
