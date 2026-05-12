@@ -163,9 +163,23 @@ void pager() {
     klog_print_hex(missingPageNo);
     klog_print("\n"); // Let's use a FIFO round-robin algorithm fo swap the pages to pick a frame
     // i from the Swap Pool.
-    static int fifoCont = 0;
-    int i = fifoCont;
-    fifoCont = (fifoCont + 1) % POOLSIZE;
+    
+
+    /*First check for an unoccupied frame before selecting an occupied frame to use.
+     This will turn an O(1) operation into an O(n) operation in exchange for fewer I/O (write) operations. */
+    int i=-1;
+    for(int j=0; j<POOLSIZE; j++){
+        if(swapPool[j].sw_asid==-1){
+            i=j;
+            break;
+        }
+    }
+    if(i==-1){
+        static int fifoCont = 0;
+        i = fifoCont;
+        fifoCont = (fifoCont + 1) % POOLSIZE;
+    }
+
 
     int physicalFrame = FLASHPOOLSTART + (i * PAGESIZE);
 

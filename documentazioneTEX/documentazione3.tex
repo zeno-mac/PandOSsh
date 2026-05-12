@@ -55,7 +55,7 @@ Le variabili globali e le strutture definite nel modulo sono:
     \item Recupera il puntatore alla struttura di supporto del processo tramite \texttt{SYSCALL(GETSUPPORTPTR)} e verifica la causa del TLB fault dall'eccezione salvata.
     \item Se l'eccezione è di tipo \texttt{TLB-Mod} (modifica), il comportamento viene dirottato al gestore delle Program Trap.
     \item Acquisisce il mutex sulla Swap Pool tramite \texttt{PASSEREN} su \texttt{swapSemaphore} e aggiorna il tracker locale \texttt{holdingSwapMutex}.
-    \item Sceglie un frame dalla Swap Pool utilizzando un algoritmo FIFO di tipo round-robin per rimpiazzare una pagina.
+    \item Sceglie un frame dalla Swap Pool utilizzando un algoritmo FIFO di tipo round-robin per rimpiazzare una pagina. Prima però controlla che ciò sia necessario: se è presente un frame non occupato utilizziamo quello.
     \item Se il frame è occupato da una pagina valida, la invalida rimuovendo il flag \texttt{VALIDON} dalla sua Page Table, svuota il TLB e salva il vecchio contenuto nel rispettivo Flash Device tramite \texttt{FLASHWRITE}.
     \item Legge la nuova pagina dal Flash Device del processo corrente e la carica nel frame fisico scelto tramite \texttt{FLASHREAD}. In caso di errore durante l'I/O, rilascia il semaforo e genera una Program Trap.
     \item Aggiorna l'entry della Swap Pool salvando il nuovo ASID, il numero di pagina (\texttt{missingPageNo}) e ricavando l'indirizzo della rispettiva entry nella Page Table.
