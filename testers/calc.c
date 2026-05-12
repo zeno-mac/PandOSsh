@@ -15,15 +15,31 @@ void deleteSpaces(char *expr, int len, char *newExpr) {
     newExpr[index] = '\0';
 }
 
-void asciiToInt(char *expr, int *first, char *opr, int *second, int len) {
+int asciiToInt(char *expr, int *first, char *opr, int *second, int len) {
     char newExpr[10];
     deleteSpaces(expr, len, newExpr);
     *first = newExpr[0] - 48;
+    if (*first < 0 || *first > 9) {
+        char *input = "first input not a number\n";
+        SYSCALL(WRITETERMINAL, (int)input, 25, 0);
+        return -1;
+    }
     if (newExpr[1] == '+' || newExpr[1] == '-' || newExpr[1] == '*' ||
         newExpr[1] == '/') {
         *opr = newExpr[1];
+    } else {
+        char *error = "not an allowed operand\n";
+        SYSCALL(WRITETERMINAL, (int)error, 23, 0);
+        return -1;
     }
+
     *second = newExpr[2] - 48;
+    if (*second < 0 || *second > 9) {
+        char *input = "second input not a number\n";
+        SYSCALL(WRITETERMINAL, (int)input, 26, 0);
+        return -1;
+    }
+    return 1;
 }
 
 int calculate(int num1, char opr, int num2) {
@@ -48,8 +64,6 @@ int calculate(int num1, char opr, int num2) {
         }
         break;
     default:
-        char *error = "not an allowed operand\n";
-        SYSCALL(WRITETERMINAL, (int)error, 23, 0);
         SYSCALL(TERMINATE, 0, 0, 0);
         break;
     }
@@ -59,8 +73,13 @@ int calculate(int num1, char opr, int num2) {
 void main() {
     char buffer[10], operand;
     int first, second;
+    char *input = "insert expression\n";
+    SYSCALL(WRITETERMINAL, (int)input, 18, 0);
     int n = SYSCALL(READTERMINAL, (int)buffer, 0, 0);
-    asciiToInt(buffer, &first, &operand, &second, n);
+    int retval = asciiToInt(buffer, &first, &operand, &second, n);
+    if (retval == -1) {
+        SYSCALL(TERMINATE, 0, 0, 0);
+    }
     int result = calculate(first, operand, second);
     char res_buffer[3];
     if (result < 0) {
@@ -83,16 +102,16 @@ void main2() {
     char *input1 = "insert first number\n";
     SYSCALL(WRITETERMINAL, (int)input1, 20, 0);
     char first[4];
-    int n1 = SYSCALL(READTERMINAL, (int)first, 0, 0);
+    SYSCALL(READTERMINAL, (int)first, 0, 0);
     int num1 = first[0] - 48;
     char *input2 = "insert operand + - * /\n";
     SYSCALL(WRITETERMINAL, (int)input2, 23, 0);
     char operand[4];
-    int n2 = SYSCALL(READTERMINAL, (int)operand, 0, 0);
+    SYSCALL(READTERMINAL, (int)operand, 0, 0);
     char *input3 = "insert second number\n";
     SYSCALL(WRITETERMINAL, (int)input3, 21, 0);
     char second[4];
-    int n3 = SYSCALL(READTERMINAL, (int)second, 0, 0);
+    SYSCALL(READTERMINAL, (int)second, 0, 0);
     int num2 = second[0] - 48;
     int result = 0;
     switch (operand[0]) {

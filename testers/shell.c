@@ -3,6 +3,21 @@
 #include "h/print.h"
 #include "h/tconst.h"
 
+struct mapAsid {
+    char *name;
+    int asid;
+};
+
+static struct mapAsid arr[] = {
+    {"fibEight", 2},
+    {"echo", 3},
+    {"fibEleven", 4},
+    {"uname", 5},
+    {"date", 6},
+    {"sl", 7},
+    {"calc", 8},
+};
+
 void chkExitAndTerminate(char *buff) {
     if (buff[0] == 'e' && buff[1] == 'x' && buff[2] == 'i' && buff[3] == 't' &&
         buff[4] == '\0') {
@@ -12,14 +27,6 @@ void chkExitAndTerminate(char *buff) {
 
 void main() {
 
-    struct mapAsid {
-        char *name;
-        int asid;
-    };
-    struct mapAsid arr[] = {
-        {"calc", 2}, {"miao", 3}, {"meow", 4},
-        {"meow", 5}, {"meow", 6}, {"meow", 7},
-    };
     char *startPrompt = "> ";
     char *unknownProg = "command not found :<\n";
     char buffer[80];
@@ -33,9 +40,12 @@ void main() {
         }
 
         chkExitAndTerminate(buffer);
+        if (buffer[0] == '\0') {
+            continue;
+        }
 
         found = 0;
-        for (int i = 0; i < 6; i++) { // search in known program asid's
+        for (int i = 0; i < 7; i++) { // search in known program asid's
             int index = 0;
 
             while (arr[i].name[index] == buffer[index]) {
