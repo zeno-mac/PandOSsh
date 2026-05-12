@@ -17,8 +17,6 @@ extern void klog_print_dec(unsigned int num);
 static swap_t swapPool[POOLSIZE];
 int swapSemaphore = 0;
 
-// TODO remove once Tlb-refill is moved
-extern pcb_t *currProc;
 
 // Forse meglio definirla da un'altra parte?
 int holdingSwapMutex[UPROCMAX] = {0}; // aggiunta per LUCA-----------------------------
@@ -40,38 +38,6 @@ void initPagetable(pteEntry_t *pageTable, int asid) {
     pageTable[31].pte_entryLO = DIRTYON;
 }
 
-// TODO Spostare in exceptions.c secondo specifiche
-// The the TLB_Refill is called when a logical address translation’s search of the of the TLB for a matching entry fails
-// The TLB-Refill inserts the missing Page Table entry and restart the instruction
-void uTLB_RefillHandler(void) {
-    klog_print("TLB refill start\n");
-
-    state_t *saved_state = (state_t *)BIOSDATAPAGE;
-
-    klog_print("TLB entryhi=");
-    klog_print_hex(saved_state->entry_hi);
-    klog_print("\n");
-
-    unsigned int missingVPN = (saved_state->entry_hi & GETPAGENO) >> VPNSHIFT;
-
-    klog_print("TLB vpn=");
-    klog_print_hex(missingVPN);
-    klog_print("\n");
-
-    pteEntry_t *pageTable = currProc->p_supportStruct->sup_privatePgTbl;
-    int pageIndex = missingVPN % MAXPAGES;
-
-    klog_print("TLB idx=");
-    klog_print_dec(pageIndex);
-    klog_print("\n");
-
-    setENTRYHI(pageTable[pageIndex].pte_entryHI);
-    setENTRYLO(pageTable[pageIndex].pte_entryLO);
-    TLBWR();
-
-    klog_print("TLB before LDST\n");
-    LDST(saved_state);
-}
 
 // Initialize the swap pool structure
 void initSwapPool() {

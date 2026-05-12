@@ -12,7 +12,24 @@
 
 extern pcb_t *currProc;
 
-extern void uTLB_RefillHandler();
+// The the TLB_Refill is called when a logical address translation’s search of the of the TLB for a matching entry fails
+// The TLB-Refill inserts the missing Page Table entry and restart the instruction
+void uTLB_RefillHandler(void) {
+
+    state_t *saved_state = (state_t *)BIOSDATAPAGE;
+
+    unsigned int missingVPN = (saved_state->entry_hi & GETPAGENO) >> VPNSHIFT;
+
+    pteEntry_t *pageTable = currProc->p_supportStruct->sup_privatePgTbl;
+    int pageIndex = missingVPN % MAXPAGES;
+
+    setENTRYHI(pageTable[pageIndex].pte_entryHI);
+    setENTRYLO(pageTable[pageIndex].pte_entryLO);
+    TLBWR();
+
+    LDST(saved_state);
+}
+
 
 /*
  * Entry point for all exceptions (excluding TLB-Refill events).
