@@ -236,7 +236,6 @@ void pager()
     holdingSwapMutex[suppPtr->sup_asid - 1] = 0; // Aggiunta per luca----------------------
     // Release mutual exclusion over the Swap Pool table
     SYSCALL(VERHOGEN, (int)&swapSemaphore, 0, 0);
-    klog_print("pager before final LDST\n");
     // Return control to the curr proc to retry the instruction that caused the
     // page fault: LDST on the saved exception state.
     LDST(&suppPtr->sup_exceptState[0]);
