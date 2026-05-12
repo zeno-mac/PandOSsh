@@ -18,6 +18,37 @@ static struct mapAsid arr[] = {
     {"calc", 8},
 };
 
+void trimSpaces(char *s) {
+    int start = 0;
+    int end = 0;
+    int write = 0;
+
+    /* trova il primo carattere non spazio */
+    while (s[start] == ' ') {
+        start++;
+    }
+
+    /* sposta la stringa a sinistra */
+    while (s[start] != '\0') {
+        s[write] = s[start];
+        start++;
+        write++;
+    }
+
+    s[write] = '\0';
+
+    /* rimuove gli spazi finali */
+    end = 0;
+    while (s[end] != '\0') {
+        end++;
+    }
+
+    while (end > 0 && s[end - 1] == ' ') {
+        s[end - 1] = '\0';
+        end--;
+    }
+}
+
 void chkExitAndTerminate(char *buff) {
     if (buff[0] == 'e' && buff[1] == 'x' && buff[2] == 'i' && buff[3] == 't' &&
         buff[4] == '\0') {
@@ -38,6 +69,8 @@ void main() {
         if (buffer[n - 1] == '\n') {
             buffer[n - 1] = '\0';
         }
+
+        trimSpaces(buffer);
 
         chkExitAndTerminate(buffer);
         if (buffer[0] == '\0') {
