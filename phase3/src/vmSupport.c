@@ -17,14 +17,15 @@ extern void klog_print_dec(unsigned int num);
 static swap_t swapPool[POOLSIZE];
 int swapSemaphore = 0;
 
-
 // Forse meglio definirla da un'altra parte?
 int holdingSwapMutex[UPROCMAX] = {0}; // aggiunta per LUCA-----------------------------
 
 // Initialize the page table of U-Proc given the page table and the asi
-void initPagetable(pteEntry_t *pageTable, int asid) {
+void initPagetable(pteEntry_t *pageTable, int asid)
+{
     // The first 31 entries are for the .text and .data pages  the logical address space
-    for (int i = 0; i < MAXPAGES - 1; i++) {
+    for (int i = 0; i < MAXPAGES - 1; i++)
+    {
         // The VPN field will be from 0x8000 to 0x8001E
         pageTable[i].pte_entryHI = (KUSEG + (i << VPNSHIFT)) | (asid << ASIDSHIFT);
         pageTable[i].pte_entryLO = DIRTYON;
@@ -38,10 +39,11 @@ void initPagetable(pteEntry_t *pageTable, int asid) {
     pageTable[31].pte_entryLO = DIRTYON;
 }
 
-
 // Initialize the swap pool structure
-void initSwapPool() {
-    for (int i = 0; i < POOLSIZE; i++) {
+void initSwapPool()
+{
+    for (int i = 0; i < POOLSIZE; i++)
+    {
         swapPool[i].sw_asid = -1;   // -1 = The frame is unoccupied
         swapPool[i].sw_pageNo = -1; // -1 = The page number is non valid
         swapPool[i].sw_pte = NULL;
@@ -55,7 +57,8 @@ void initSwapPool() {
 // blocco 31 <=> vpn 0xBFFFF
 // blocchi[0..30] <=> vpn 0x80000,0x80001,..,0x8001E
 // quindi per vpn=0x80002 il blocco è il 2
-int getFlashBlock(int vpn) {
+int getFlashBlock(int vpn)
+{
     if (vpn == 0xBFFFF)
         return 31;
     else
@@ -65,7 +68,8 @@ int getFlashBlock(int vpn) {
 // funzione aux per calcolare l'addr base dei registri dei flash dev
 // ogni processo utente ha un suo flash dev il cui asid va da 1..8,
 // segue che i registi vanno da 0..7 = (1..8)-1
-devreg_t *getFlashRegister(int asid) {
+devreg_t *getFlashRegister(int asid)
+{
     int devNo = asid - 1;
     if (devNo < 0 || devNo >= UPROCMAX)
         return NULL;
@@ -87,7 +91,8 @@ request a NSYS5: int ioStatus = SYSCALL(DOIO, int *commandAddr, int
 commandValue, 0); Where the mnemonic constant DOIO has the value of -5.
 
 */
-int readWriteFlashdrive(int asid, int vpn, int phisicalFrame, int op) {
+int readWriteFlashdrive(int asid, int vpn, int phisicalFrame, int op)
+{
     klog_print("flash rw start\n");
 
     klog_print("asid=");
@@ -109,7 +114,8 @@ int readWriteFlashdrive(int asid, int vpn, int phisicalFrame, int op) {
     klog_print_hex((unsigned int)reg);
     klog_print("\n");
 
-    if (block < 0 || block >= MAXPAGES || reg == NULL) {
+    if (block < 0 || block >= MAXPAGES || reg == NULL)
+    {
         klog_print("flash invalid params\n");
         return -1;
     }
@@ -129,7 +135,8 @@ int readWriteFlashdrive(int asid, int vpn, int phisicalFrame, int op) {
 
 // SEZIONE 4.2 - Mazzo
 
-void pager() {
+void pager()
+{
     klog_print("pager start\n");
 
     support_t *suppPtr = (support_t *)SYSCALL(GETSUPPORTPTR, 0, 0, 0);
@@ -145,7 +152,8 @@ void pager() {
     klog_print_dec(cause);
     klog_print("\n");
 
-    if (cause == EXC_MOD) {
+    if (cause == EXC_MOD)
+    {
         klog_print("pager EXC_MOD\n");
         programTrapHandler(suppPtr);
     }
@@ -184,7 +192,8 @@ void pager() {
     int physicalFrame = FLASHPOOLSTART + (i * PAGESIZE);
 
     // Determine if frame i is occupied; examine entry i in the Swap Pool table
-    if (swapPool[i].sw_asid != -1) {
+    if (swapPool[i].sw_asid != -1)
+    {
         // Frame occupied: assume it is occupied by logical page number k
         // belonging to process x (ASID) and that it is “dirty”
         int x = swapPool[i].sw_asid;
@@ -199,7 +208,15 @@ void pager() {
         //(*)Update the TLB: if process x’s page k’s Page Table entry is
         // currently cached, it is clearly out of date; it was just updated in
         // the previous step.
-        TLBCLR();
+        // Simple implementation: TLBCLR();
+        setENTRYHI(swapPool[i].sw_pte->pte_entryHI);
+        TLBP();
+        if ((getINDEX() & 0x80000000) == 0)
+        {
+            setENTRYLO(swapPool[i].sw_pte->pte_entryLO);
+            TLBWI();
+        }
+
         // TODO Add the improved tlb update once the first test is done
         setSTATUS(status);
 
@@ -214,7 +231,8 @@ void pager() {
 
     klog_print("before flash read\n");
 
-    if (ioStatus != 1) {
+    if (ioStatus != 1)
+    {
         // if status!=READY call the Trap Handler
         holdingSwapMutex[suppPtr->sup_asid - 1] = 0; // Aggiunta per luca----------------------
         SYSCALL(VERHOGEN, (int)&swapSemaphore, 0, 0);
@@ -236,9 +254,7 @@ void pager() {
     //  blocco 31 <=> vpn 0xBFFFF
     //  blocchi[0..30] <=> vpn 0x80000,0x80001,..,0x8001E
     //  quindi per vpn=0x80002 il blocco è il 2
-    int pageIdx=getFlashBlock(missingPageNo);
-    
-
+    int pageIdx = getFlashBlock(missingPageNo);
 
     int status = getSTATUS();
     setSTATUS(status & ~MSTATUS_MIE_MASK);
@@ -249,7 +265,15 @@ void pager() {
     swapPool[i].sw_pte->pte_entryLO = physicalFrame | DIRTYON | VALIDON;
 
     // Update the TLB. Same as before (*)
-    TLBCLR();
+    // Simple implementation: TLBCLR();
+    setENTRYHI(swapPool[i].sw_pte->pte_entryHI);
+    TLBP();
+    if ((getINDEX() & 0x80000000) == 0)
+    {
+        setENTRYLO(swapPool[i].sw_pte->pte_entryLO);
+        TLBWI();
+    }
+
     setSTATUS(status);
 
     holdingSwapMutex[suppPtr->sup_asid - 1] = 0; // Aggiunta per luca----------------------
