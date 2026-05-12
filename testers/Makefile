@@ -9,21 +9,21 @@ OBJCOPY = $(XT_PRG_PREFIX)objcopy
 OBJDUMP = $(XT_PRG_PREFIX)objdump
 
 # uRISCV-related paths
-URISCV_DIR_PREFIX = /usr/local
+URISCV_DIR_PREFIX = /usr
 
-URISCV_DATA_DIR = $(URISCV_DIR_PREFIX)/share/uriscv
-URISCV_INCLUDE_DIR = /usr/include
-URISCV_LIB_DIR = /usr/lib/uriscv
+URISCV_DATA_DIR = $(URISCV_DIR_PREFIX)/local/share/uriscv
+URISCV_INCLUDE_DIR = $(URISCV_DIR_PREFIX)/include
+URISCV_LIB_DIR = $(URISCV_DIR_PREFIX)/lib/uriscv
 
-TDEFS = h/print.h h/tconst.h $(URISCV_DATA_DIR)/liburiscv.e Makefile
+TDEFS = test/print.h test/tconst.h $(URISCV_INCLUDE_DIR)/uriscv/liburiscv.e Makefile
 
 # CFLAGS = -ffreestanding -ansi -c -mips1 -mabi=32 -mfp32 -mno-gpopt -G 0 -I$(URISCV_INCLUDE_DIR) -std=gnu99 -fno-pic -mno-abicalls
 CFLAGS_LANG = -ffreestanding -static -c -nostdlib
 CFLAGS = $(CFLAGS_LANG) -I$(URISCV_INCLUDE_DIR) -Wall -O0 -march=rv32imfd -mabi=ilp32d
 # -Wall
 
-LDAOUTFLAGS = -G 0 -nostdlib -m elf32lriscv -T $(URISCV_DATA_DIR)/uriscvaout.ldscript
-LDCOREFLAGS = -G 0 -nostdlib -m elf32lriscv -T $(URISCV_DATA_DIR)/uriscvcore.ldscript
+LDAOUTFLAGS = -G 0 -nostdlib -T $(URISCV_DATA_DIR)/uriscvaout.ldscript -march=rv32imfd -melf32lriscv
+LDCOREFLAGS = -G 0 -nostdlib -T $(URISCV_DATA_DIR)/uriscvcore.ldscript -march=rv32imfd -melf32lriscv
 
 # AS = mipsel-linux-gnu-as -KPIC
 
