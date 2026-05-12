@@ -182,8 +182,8 @@ void pager()
             break;
         }
     }
+    static int fifoCont = 0;
     if(i==-1){
-        static int fifoCont = 0;
         i = fifoCont;
         fifoCont = (fifoCont + 1) % POOLSIZE;
     }
