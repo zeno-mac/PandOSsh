@@ -116,9 +116,10 @@ void deviceInterruptHandler(int excCode) {
         }
     }
 
-    int mapAddr = 0x10000040 + ((IntLineNo - 3) * WORDLEN);
-    int bitmap = *((int *)mapAddr);
+    int mapAddr = 0x10000040 + ((IntLineNo - 3) * WORDLEN); // startingAddress+(normilized line of 2nd table)*lengthOfWord
+    int bitmap = *((int *)mapAddr); // Saves in bitmap the value of the map pointed by the address
 
+    // Let's find which device actually triggered the interrupt
     if (bitmap & DEV0ON)
         DevNo = 0;
     else if (bitmap & DEV1ON)
@@ -154,10 +155,10 @@ void deviceInterruptHandler(int excCode) {
      * line 7 -> indici 32..39 per terminal receive
      */
     int semaphoreIdx = (IntLineNo - 3) * DEVPERINT + DevNo;
-
+    // To switch from matrix form to array you get the deviceLine and multiply it by 8(since there's 8 devices for each line) and the add the device number
     int status;
 
-    if (IntLineNo == 7) {
+    if (IntLineNo == 7) { // Check to see if this interrupt is generated from a terminal "sender"
         /*
          * Terminal device.
          *
@@ -172,33 +173,24 @@ void deviceInterruptHandler(int excCode) {
         int transmissionStatus = *((int *)(devAddr + 0x8));
 
         /*
-         * La trasmissione ha priorità, ma solo se è DAVVERO
+         * La trasmissione ha priorità, ma solo se è davvero
          * una trasmissione completata.
          *
-         * Non basta controllare != 0, perché READY = 1.
          */
         if ((transmissionStatus & 0xFF) == OKCHARTRANS) {
             status = transmissionStatus;
-            *((int *)(devAddr + 0xC)) = ACK;
+            *((int *)(devAddr + 0xC)) = ACK; // ACKs the end of this transmission
 
             /*
              * Transmit usa la seconda metà dei semafori terminali.
              */
             semaphoreIdx += DEVPERINT;
 
-        } else if ((receiveStatus & 0xFF) == CHARRECV) {
+        } else if ((receiveStatus & 0xFF) == CHARRECV) {   // The interrupts comes from the reciever
             status = receiveStatus;
             *((int *)(devAddr + 0x4)) = ACK;
 
-            /*
-             * Receive usa il semaforo base, quindi NON aggiungiamo DEVPERINT.
-             */
-
         } else {
-            /*
-             * Caso anomalo: interrupt terminale ma nessun sub-device
-             * risulta completato.
-             */
             if (currProc != NULL) {
                 LDST(getCurrExceptionState());
             } else {
@@ -213,25 +205,19 @@ void deviceInterruptHandler(int excCode) {
         status = *((int *)(devAddr + 0x0));
         *((int *)(devAddr + 0x4)) = ACK;
     }
+    // Remove first process waiting for that semaphore, we are performing a sem.V()
     int *deviceSem = &device_semaphores[semaphoreIdx];
 
     pcb_t *unblockedPcb = removeBlocked(deviceSem);
 
     if (unblockedPcb != NULL) {
-        /*
-         * Ritorno della DOIO: va messo in a0 del processo sbloccato.
-         */
         unblockedPcb->p_s.reg_a0 = status;
-
         insertProcQ(&readyQueue, unblockedPcb);
         softBlock_count--;
     } else {
-        /*
-         * Può succedere se nessun processo stava aspettando quel device.
-         */
-        (*deviceSem)++;
+        (*deviceSem)++; // Increase the semaphore value if there were no process waiting
     }
-
+    // Saves the currProc state and puts him in the queue since there is another process(the unblocked one) who should be starting as we call the scheduler with dispatch()
     if (currProc != NULL) {
         LDST(getCurrExceptionState());
     } else {
