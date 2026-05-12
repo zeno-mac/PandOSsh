@@ -14,7 +14,7 @@ extern void klog_print_dec(unsigned int num);
 #define FLASH_LINE_NO 4
 
 // PoolSize = (UPROCMAX * 2) = 16 Frames
-static swap_t swapPool[POOLSIZE];
+swap_t swapPool[POOLSIZE];
 int swapSemaphore = 0;
 
 // Forse meglio definirla da un'altra parte?

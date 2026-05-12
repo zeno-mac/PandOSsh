@@ -16,6 +16,7 @@ extern int holdingSwapMutex[UPROCMAX];
 extern int swapSemaphore;
 extern int termWriteSemaphore;
 extern int termReadSemaphore;
+extern swap_t swapPool[];
 
 static int writeTerminal(char *str, int len) {
     termreg_t *term = (termreg_t *)DEV_REG_ADDR(IL_TERMINAL, 0);
@@ -113,6 +114,18 @@ void sys2(support_t *sup) {
     } else {
         SYSCALL(VERHOGEN, (int)&shellSemaphore, 0, 0);
     }
+
+
+    // Optimization number 2:
+    // When a U-proc terminates, mark all of the frames it occupied as unoccupied
+    SYSCALL(PASSEREN, (int)&swapSemaphore, 0, 0);
+    for (int j = 0; j < POOLSIZE; j++)
+    {
+        if (swapPool[j].sw_asid == asid)
+            swapPool[j].sw_asid = -1;
+    }
+    SYSCALL(VERHOGEN, (int)&swapSemaphore, 0, 0);
+
 
     SYSCALL(TERMPROCESS, 0, 0, 0);
 }
