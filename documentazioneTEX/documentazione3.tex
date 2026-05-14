@@ -69,7 +69,9 @@ Questa parte del progetto implementa la gestione delle eccezioni generali del Su
 
 \begin{itemize}
     \item \texttt{sysSupport.c}: gestisce le eccezioni generali del Support Level, distinguendo tra syscall positive e Program Trap.
-    \item \texttt{syscalls.c}: implementa le syscall positive gestite dal Support Level, in particolare \texttt{SYS2} e \texttt{SYS6}.
+     \item \texttt{syscalls.c}: implementa le syscall positive \texttt{SYS2},
+          \texttt{SYS4}, \texttt{SYS5} e \texttt{SYS6}, più le funzioni ausiliarie
+          di I/O sul terminale.
 \end{itemize}
 
 \vspace{0.5cm}
@@ -132,9 +134,85 @@ Il comportamento della funzione è il seguente:
 \vspace{0.5cm}
 \subsection{\texttt{syscalls.c}: Syscall Positive}
 
-Il modulo \texttt{syscalls.c} contiene l'implementazione effettiva delle syscall positive usate dagli U-proc. In particolare, questa sezione descrive \texttt{SYS2} e \texttt{SYS6}, cioè le parti assegnate.
+Il modulo \texttt{syscalls.c} contiene l'implementazione effettiva di tutte le
+syscall positive accessibili agli U-proc (\texttt{SYS2}, \texttt{SYS4},
+\texttt{SYS5}, \texttt{SYS6}) e delle funzioni ausiliarie di I/O sul terminale.
 
 \vspace{0.3cm}
+
+
+
+\subsubsection{\texttt{int writeTerminal(char *str, int len)}}
+ 
+Funzione che trasmette \texttt{len} caratteri della
+stringa \texttt{str} sul terminale 0, carattere per carattere tramite la syscall
+negativa \texttt{DOIO} (NSYS5).
+ 
+\medskip
+\textbf{Scelta progettuale sul semaforo:} il semaforo \texttt{termWriteSemaphore}
+viene acquisito \emph{una sola volta} prima del ciclo di trasmissione e rilasciato
+al termine.
+Acquisire e rilasciare il semaforo ad ogni singolo carattere permetterebbe ad
+un altro U-proc di interporsi tra due caratteri consecutivi, mescolando l'output
+di stringhe diverse sullo stesso terminale.
+ 
+\medskip
+Il comportamento è il seguente:
+ 
+\begin{enumerate}
+    \item Acquisisce \texttt{termWriteSemaphore} con una \texttt{P} (PASSEREN).
+    \item Per ogni carattere da trasmettere:
+    \begin{itemize}
+        \item Costruisce il comando: \texttt{(char << 8) | TRANSMITCHAR},
+              dove \texttt{TRANSMITCHAR = 2}.
+        \item Invia il comando al registro \texttt{transm\_command} del terminale
+              tramite \texttt{DOIO}; il processo rimane sospeso fino all'interrupt
+              di completamento gestito dal Nucleus.
+        \item Controlla il byte di stato restituito (bit 7:0). Se diverso da
+              \texttt{OKCHARTRANS} (5), rilascia il semaforo e restituisce il
+              negativo del byte di stato.
+    \end{itemize}
+    \item Rilascia \texttt{termWriteSemaphore} con una \texttt{V} (VERHOGEN).
+    \item Restituisce il numero di caratteri trasmessi con successo.
+\end{enumerate}
+ 
+ 
+\subsubsection{\texttt{static int readTerminal(char *buf)}}
+ 
+Funzione  che legge una riga dal terminale 0 nel buffer
+\texttt{buf}, carattere per carattere tramite \texttt{DOIO} (NSYS5). La lettura
+termina al carattere newline (\texttt{\textbackslash n}) o su errore del device.
+ 
+\medskip
+Per la stessa motivazione di \texttt{writeTerminal}, il semaforo
+\texttt{termReadSemaphore} viene acquisito una sola volta prima del ciclo di
+ricezione: ciò garantisce che l'intera riga venga letta da un solo U-proc senza
+interleaving.
+ 
+\medskip
+Il comportamento è il seguente:
+ 
+\begin{enumerate}
+    \item Acquisisce \texttt{termReadSemaphore} con una \texttt{P}.
+    \item In un ciclo while:
+    \begin{itemize}
+        \item Invia il comando \texttt{RECEIVECHAR} (2) al registro
+              \texttt{recv\_command} del terminale tramite \texttt{DOIO}.
+        \item Controlla il byte di stato (bit 7:0). Se diverso da
+              \texttt{CHARRECV} (5), rilascia il semaforo e restituisce il
+              negativo del byte di stato.
+        \item Estrae il carattere ricevuto dai bit 15:8 del registro di stato.
+        \item Aggiunge il carattere al buffer e incrementa il contatore.
+        \item Se il carattere è \texttt{\textbackslash n}, termina il ciclo.
+    \end{itemize}
+    \item Rilascia \texttt{termReadSemaphore} con una \texttt{V}.
+    \item Restituisce il numero di caratteri ricevuti.
+\end{enumerate}
+
+
+
+
+
 \subsubsection{\texttt{void sys2(support\_t *sup)}}
 
 La funzione \texttt{sys2()} implementa la syscall positiva \texttt{TERMINATE}, cioè \texttt{SYS2}. Questa syscall permette a un U-proc di terminare la propria esecuzione in modo ordinato.
@@ -166,6 +244,69 @@ Il comportamento della funzione è il seguente:
 
 Questa implementazione non si limita quindi a terminare il processo, ma si occupa anche di mantenere coerenti i semafori usati per la sincronizzazione tra shell, processi figli e Instantiator Process.
 
+
+
+
+
+\subsubsection{\texttt{void sys4(support\_t *sup)}}
+ 
+Implementa la syscall positiva \texttt{WRITETERMINAL} (SYS4). Sospende il
+processo richiedente fino alla trasmissione di una stringa sul terminale
+associato all'U-proc.
+ 
+\medskip
+Parametri letti dallo stato salvato (\texttt{sup\_exceptState[GENERALEXCEPT]}):
+ 
+\begin{itemize}
+    \item \texttt{reg\_a1}: indirizzo virtuale della stringa da trasmettere.
+    \item \texttt{reg\_a2}: lunghezza della stringa.
+\end{itemize}
+ 
+Il comportamento è il seguente:
+ 
+\begin{enumerate}
+    \item \textbf{Validazione indirizzo:} l'intera stringa deve essere contenuta
+          nel segmento utente (\texttt{kuseg}), ovvero:
+          \begin{center}
+              \texttt{str >= KUSEG} e \texttt{str + len <= USERSTACKTOP}
+          \end{center}
+          In caso contrario il processo viene terminato tramite \texttt{sys2()}.
+ 
+    \item \textbf{Validazione lunghezza:} deve essere compresa in
+          \texttt{[0, MAXSTRLENG]} (128 caratteri). Altrimenti il processo
+          viene terminato.
+ 
+    \item Se le validazioni hanno successo, chiama \texttt{writeTerminal(str, len)}
+          e salva il risultato in \texttt{reg\_a0} dello stato salvato.
+ 
+    \item Ripristina il processo con \texttt{LDST(excState)}: il PC è già stato
+          avanzato di \texttt{WORDLEN} da \texttt{pos\_syscallHandler()}, quindi
+          il processo riprende all'istruzione successiva alla \texttt{SYSCALL}.
+\end{enumerate}
+ 
+ 
+\subsubsection{\texttt{void sys5(support\_t *sup)}}
+ 
+Implementa la syscall positiva \texttt{READTERMINAL} (SYS5). Sospende il
+processo richiedente fino alla ricezione di una riga dal terminale.
+ 
+\medskip
+Parametri letti dallo stato salvato:
+ 
+\begin{itemize}
+    \item \texttt{reg\_a1}: indirizzo virtuale del buffer di destinazione.
+\end{itemize}
+ 
+Il comportamento è il seguente:
+ 
+\begin{enumerate}
+    \item \textbf{Validazione indirizzo:} il buffer deve trovarsi in \texttt{kuseg}
+          (\texttt{buf >= KUSEG}). Altrimenti il processo viene terminato.
+ 
+    \item Chiama \texttt{readTerminal(buf)} e salva il risultato in \texttt{reg\_a0}.
+ 
+    \item Ripristina il processo con \texttt{LDST(excState)}.
+\end{enumerate}
 \vspace{0.3cm}
 \subsubsection{\texttt{void sys6(support\_t *sup)}}
 
