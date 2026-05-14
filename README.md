@@ -148,6 +148,118 @@ The functions that this module provides are the following:
 <li><b>void pager()</b>: Handles page faults by selecting a swap frame, writing back if dirty, loading the missing page, updating the page table and TLB, and managing access with a semaphore.
 </ul>
 
+## Positive Syscalls and General Exception Handler
+
+The <b>sysSupport.c</b> and <b>syscalls.c</b> modules implement the Support Level general exception handler and the positive syscalls used by U-procs.
+
+The <b>sysSupport.c</b> file handles all non-TLB exceptions passed up by the Nucleus to the Support Level. In particular, it distinguishes between positive syscall exceptions and Program Trap exceptions.
+
+The most important functions in <b>sysSupport.c</b> are:
+<ul>
+<li><b>void generalExceptionHandler()</b>: entry point for Support Level general exceptions. It obtains the current process Support Structure using <b>GETSUPPORTPTR</b>, reads the saved exception cause and dispatches the execution either to the positive syscall handler or to the Program Trap handler.
+<li><b>void programTrapHandler(support_t *sup)</b>: handles Program Trap exceptions. In this implementation, a Program Trap causes the current U-proc to terminate through <b>sys2()</b>.
+<li><b>void pos_syscallHandler(support_t *sup)</b>: handles positive syscalls requested by U-procs. It reads the syscall number from register <b>a0</b>, increments the saved PC by one word to avoid repeating the same syscall, and dispatches the request to the correct syscall function.
+</ul>
+
+The positive syscalls handled by <b>pos_syscallHandler()</b> are:
+<ul>
+<li><b>TERMINATE</b>: handled by <b>sys2()</b>;
+<li><b>WRITETERMINAL</b>: handled by <b>sys4()</b>;
+<li><b>READTERMINAL</b>: handled by <b>sys5()</b>;
+<li><b>EXECUTE</b>: handled by <b>sys6()</b>.
+</ul>
+
+If the syscall number is not valid, the current process is terminated.
+
+### Functions in syscalls.c
+
+The <b>syscalls.c</b> file contains the implementation of the Support Level positive syscalls.
+
+<ul>
+<li><b>void sys2(support_t *sup)</b>: implements the positive syscall <b>TERMINATE</b>. It terminates the current U-proc in an orderly way. If the process was holding the Swap Pool mutex, the mutex is released before termination. If the process is the shell, it performs a V operation on <b>masterSemaphore</b>, allowing the Instantiator Process to continue. Otherwise, it performs a V operation on <b>shellSemaphore</b>, allowing the shell to resume after the executed program terminates. It also marks all Swap Pool frames owned by the terminating ASID as free, then calls the Nucleus <b>TERMPROCESS</b> syscall.
+<li><b>void sys4(support_t *sup)</b>: implements <b>WRITETERMINAL</b>. It validates the string address and length, writes characters to terminal 0 and returns the number of transmitted characters in <b>a0</b>.
+<li><b>void sys5(support_t *sup)</b>: implements <b>READTERMINAL</b>. It validates the buffer address, reads characters from terminal 0 until a newline is received and returns the number of read characters in <b>a0</b>.
+<li><b>void sys6(support_t *sup)</b>: implements the positive syscall <b>EXECUTE</b>. It can only be called by the shell. It reads the ASID of the program to execute from register <b>a1</b>, checks that the ASID is valid and different from the shell ASID, creates the new U-proc with <b>createUProc()</b>, and then blocks the shell on <b>shellSemaphore</b> until the child process terminates.
+</ul>
+
+## U-proc Initialization
+
+The <b>initProc.c</b> module contains the initialization logic for Phase 3 and the creation of U-procs. This file implements the Instantiator Process, which is the first process launched by the Nucleus during Phase 3.
+
+The main global variables exported by this module are:
+<ol>
+<li><b>masterSemaphore</b>: semaphore used to block the Instantiator Process until the shell terminates;
+<li><b>shellSemaphore</b>: semaphore used to block the shell while an executed user program is running;
+<li><b>termWriteSemaphore</b>: mutual exclusion semaphore for terminal write operations;
+<li><b>termReadSemaphore</b>: mutual exclusion semaphore for terminal read operations;
+<li><b>supportPool[UPROCMAX]</b>: static array of Support Structures, one for each possible U-proc.
+</ol>
+
+### Functions in initProc.c
+
+<ul>
+<li><b>int createUProc(int asid)</b>: creates a new U-proc associated with the given ASID. It checks that the ASID is valid, selects the correct Support Structure from <b>supportPool</b>, initializes the processor state and Support Structure through <b>initUProc()</b>, and finally calls the Nucleus <b>CREATEPROCESS</b> syscall. It returns the PID of the new process or <b>NOPROC</b> in case of failure.
+<li><b>void test()</b>: Instantiator Process of Phase 3. It initializes the Support Level semaphores, initializes the Swap Pool through <b>initSwapPool()</b>, creates the shell using <b>createUProc(SHELL_ASID)</b>, waits on <b>masterSemaphore</b> until the shell terminates, and finally terminates itself using <b>TERMPROCESS</b>.
+</ul>
+
+The actual setup of the initial processor state, private page table and Support Level exception contexts is performed by the helper function <b>initUProc()</b>, defined in <b>helpers.c</b>. This function initializes:
+<ul>
+<li>the initial processor state of the U-proc;
+<li>the ASID inside the Support Structure;
+<li>the context for TLB/Page Fault exceptions;
+<li>the context for general exceptions;
+<li>the private page table of the process.
+</ul>
+
+## Shell
+
+The <b>shell.c</b> file implements the user shell. The shell is an interactive U-proc that reads commands from terminal 0 and executes the corresponding user programs.
+
+The shell uses a static mapping between program names and ASID values:
+<ul>
+<li><b>fibEight</b>: ASID 2;
+<li><b>echo</b>: ASID 3;
+<li><b>fibEleven</b>: ASID 4;
+<li><b>uname</b>: ASID 5;
+<li><b>date</b>: ASID 6;
+<li><b>sl</b>: ASID 7;
+<li><b>calc</b>: ASID 8.
+</ul>
+
+### Functions in shell.c
+
+<ul>
+<li><b>void trimSpaces(char *s)</b>: removes leading and trailing spaces from the command inserted by the user.
+<li><b>void chkExitAndTerminate(char *buff)</b>: checks if the inserted command is <b>exit</b>. If so, the shell terminates itself by calling the positive <b>TERMINATE</b> syscall.
+<li><b>void main()</b>: main loop of the shell. It prints the prompt <b>&gt; </b>, reads a command from terminal, removes the final newline, trims spaces, checks for the <b>exit</b> command, searches the command in the static ASID table and, if found, executes it through the positive <b>EXECUTE</b> syscall. If the command is not found, it prints an error message.
+</ul>
+
+The shell executes one program at a time. When a valid command is inserted, the shell calls <b>SYS6</b> and remains blocked until the executed process terminates.
+
+## Calc
+
+The <b>calc.c</b> file implements a simple calculator program. It is executed from the shell by typing:
+
+calc
+
+The program reads a simple arithmetic expression composed of:
+
+<ul> <li>one single-digit number; <li>one operator; <li>one second single-digit number. </ul>
+
+The supported operators are:
+
+<ul> <li><b>+</b>: addition; <li><b>-</b>: subtraction; <li><b>*</b>: multiplication; <li><b>/</b>: integer division. </ul>
+
+Example of valid inputs:
+
+3+4,
+3 + 4,
+8/2,
+
+Functions in calc.c
+<ul> <li><b>void deleteSpaces(char *expr, int len, char *newExpr)</b>: copies the input expression into a new buffer while removing spaces. <li><b>int asciiToInt(char *expr, int *first, char *opr, int *second, int len)</b>: parses the expression, converts the two operands from ASCII to integers and checks that the operator is valid. <li><b>int calculate(int num1, char opr, int num2)</b>: executes the requested arithmetic operation and returns the result. Division by zero is detected and causes the program to terminate. <li><b>void main()</b>: main function of the calculator. It asks for an expression, reads it from terminal, parses it, computes the result, prints it and terminates. </ul>
+
+The program terminates using the positive <b>TERMINATE</b> syscall after printing the result or after detecting an invalid input.
 
 
 # Compiling and running
