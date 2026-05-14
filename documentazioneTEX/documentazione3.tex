@@ -61,5 +61,380 @@ Le variabili globali e le strutture definite nel modulo sono:
     \item Aggiorna l'entry della Swap Pool salvando il nuovo ASID, il numero di pagina (\texttt{missingPageNo}) e ricavando l'indirizzo della rispettiva entry nella Page Table.
     \item Modifica l'entry della Page Table appena trovata unendo l'indirizzo fisico del frame e impostando i flag \texttt{DIRTYON} e \texttt{VALIDON}.
     \item Rilascia l'uso del semaforo su \texttt{swapSemaphore} (resettando anche \texttt{holdingSwapMutex}) e restituisce il controllo ricaricando lo stato per tentare nuovamente l'istruzione \texttt{LDST}.
+
+    
+    \section{Gestione delle Syscall Positive}
+
+Questa parte del progetto implementa la gestione delle eccezioni generali del Support Level, alcune syscall positive richieste dagli U-proc, l'inizializzazione dei processi utente e due programmi utente: la shell e \texttt{calc}. I file principali coinvolti sono:
+
+\begin{itemize}
+    \item \texttt{sysSupport.c}: gestisce le eccezioni generali del Support Level, distinguendo tra syscall positive e Program Trap.
+    \item \texttt{syscalls.c}: implementa le syscall positive gestite dal Support Level, in particolare \texttt{SYS2} e \texttt{SYS6}.
+\end{itemize}
+
+\vspace{0.5cm}
+\subsection{\texttt{sysSupport.c}: Gestione delle Eccezioni Generali}
+
+Il modulo \texttt{sysSupport.c} contiene il gestore generale delle eccezioni del Support Level. Questo gestore riceve il controllo quando il Nucleus effettua il meccanismo di \textit{Pass Up} verso il Support Level per eccezioni non legate direttamente al TLB.
+
+\vspace{0.3cm}
+\subsubsection{\texttt{void generalExceptionHandler()}}
+
+La funzione \texttt{generalExceptionHandler()} è il punto di ingresso per le eccezioni generali del Support Level. Il suo funzionamento può essere riassunto nei seguenti passi:
+
+\begin{enumerate}
+    \item Recupera la \texttt{Support Structure} del processo corrente tramite la syscall negativa \texttt{GETSUPPORTPTR}.
+    \item Legge il registro \texttt{cause} salvato in \texttt{sup\_exceptState[GENERALEXCEPT]}.
+    \item Estrae il codice dell'eccezione tramite la maschera \texttt{CAUSE\_EXCCODE\_MASK}.
+    \item Se l'eccezione è una syscall, cioè \texttt{SYSEXCEPTION} oppure codice 11, passa il controllo a \texttt{pos\_syscallHandler()}.
+    \item In tutti gli altri casi considera l'eccezione come una Program Trap e invoca \texttt{programTrapHandler()}.
+\end{enumerate}
+
+Questa funzione quindi separa le syscall positive dalle eccezioni dovute a comportamenti non validi del processo utente.
+
+\vspace{0.3cm}
+\subsubsection{\texttt{void programTrapHandler(support\_t *sup)}}
+
+La funzione \texttt{programTrapHandler()} gestisce le Program Trap. Nel nostro progetto una Program Trap viene trattata come una terminazione ordinata del processo che l'ha causata.
+
+Per questo motivo la funzione richiama direttamente: \texttt{sys2(sup)}
+
+
+In questo modo il processo viene terminato tramite la stessa logica usata dalla syscall positiva \texttt{SYS2}.
+
+\vspace{0.3cm}
+\subsubsection{\texttt{void pos\_syscallHandler(support\_t *sup)}}
+
+La funzione \texttt{pos\_syscallHandler()} implementa il gestore delle syscall positive, cioè le syscall disponibili agli U-proc.
+
+Il comportamento della funzione è il seguente:
+
+\begin{enumerate}
+    \item Recupera lo stato salvato dell'eccezione generale: 
+    
+    \texttt{sup->sup\_exceptState[GENERALEXCEPT]}
+
+    \item Legge da \texttt{reg\_a0} il numero della syscall richiesta.
+
+    \item Incrementa il program counter di \texttt{WORDLEN}, in modo che, al ritorno dalla syscall, il processo riprenda dall'istruzione successiva alla \texttt{SYSCALL}. Senza questo incremento il processo rieseguirebbe la stessa syscall in loop.
+
+    \item Usa uno \texttt{switch} sul valore di \texttt{a0} per invocare il servizio richiesto:
+    \begin{itemize}
+        \item \texttt{TERMINATE}: invoca \texttt{sys2(sup)}.
+        \item \texttt{WRITETERMINAL}: invoca \texttt{sys4(sup)}.
+        \item \texttt{READTERMINAL}: invoca \texttt{sys5(sup)}.
+        \item \texttt{EXECUTE}: invoca \texttt{sys6(sup)}.
+    \end{itemize}
+
+    \item Se il numero della syscall non è riconosciuto, il processo viene terminato tramite \texttt{sys2(sup)}.
+\end{enumerate}
+
+\vspace{0.5cm}
+\subsection{\texttt{syscalls.c}: Syscall Positive}
+
+Il modulo \texttt{syscalls.c} contiene l'implementazione effettiva delle syscall positive usate dagli U-proc. In particolare, questa sezione descrive \texttt{SYS2} e \texttt{SYS6}, cioè le parti assegnate.
+
+\vspace{0.3cm}
+\subsubsection{\texttt{void sys2(support\_t *sup)}}
+
+La funzione \texttt{sys2()} implementa la syscall positiva \texttt{TERMINATE}, cioè \texttt{SYS2}. Questa syscall permette a un U-proc di terminare la propria esecuzione in modo ordinato.
+
+Il comportamento della funzione è il seguente:
+
+\begin{enumerate}
+    \item Recupera l'ASID del processo corrente tramite: \texttt{sup->sup\_asid}
+
+
+    \item Controlla se il processo sta mantenendo il mutex sulla Swap Pool tramite l'array \texttt{holdingSwapMutex}. Se il processo possiede ancora il mutex:
+    \begin{itemize}
+        \item resetta il flag associato all'ASID;
+        \item rilascia il semaforo \texttt{swapSemaphore} tramite \texttt{VERHOGEN}.
+    \end{itemize}
+
+    \item Se il processo da terminare è la shell, cioè ha ASID uguale a \texttt{SHELL\_ASID}, viene eseguita una \texttt{V} su \texttt{masterSemaphore}. Questo sblocca l'\textit{Instantiator Process}, che stava aspettando la terminazione della shell.
+
+    \item Se invece il processo non è la shell, viene eseguita una \texttt{V} su \texttt{shellSemaphore}. Questo sblocca la shell, che era rimasta in attesa della terminazione del programma lanciato tramite \texttt{SYS6}.
+
+    \item Come ottimizzazione, la funzione acquisisce \texttt{swapSemaphore} e scorre tutta la \texttt{swapPool}. Per ogni frame appartenente al processo terminato, cioè con \texttt{sw\_asid == asid}, imposta \texttt{sw\_asid = -1}. In questo modo i frame occupati dal processo terminato vengono marcati come liberi.
+
+    \item Rilascia nuovamente \texttt{swapSemaphore}.
+
+    \item Infine invoca la syscall negativa del Nucleus: \texttt{SYSCALL(TERMPROCESS,0,0,0)}
+
+    che termina effettivamente il processo corrente.
+\end{enumerate}
+
+Questa implementazione non si limita quindi a terminare il processo, ma si occupa anche di mantenere coerenti i semafori usati per la sincronizzazione tra shell, processi figli e Instantiator Process.
+
+\vspace{0.3cm}
+\subsubsection{\texttt{void sys6(support\_t *sup)}}
+
+La funzione \texttt{sys6()} implementa la syscall positiva \texttt{EXECUTE}, cioè \texttt{SYS6}. Questa syscall consente alla shell di creare un nuovo U-proc dato il suo ASID.
+
+Il comportamento della funzione è il seguente:
+
+\begin{enumerate}
+    \item Recupera lo stato salvato dell'eccezione generale:
+
+        \texttt{sup->sup\_exceptState[GENERALEXCEPT]}
+
+    \item Legge da \texttt{reg\_a1} l'ASID del processo da creare.
+
+    \item Verifica che il chiamante sia effettivamente la shell. Se \texttt{sup->sup\_asid} è diverso da \texttt{SHELL\_ASID}, la richiesta non è valida e il processo viene terminato tramite \texttt{sys2()}.
+
+    \item Verifica che l'ASID richiesto sia valido:
+    \begin{itemize}
+        \item deve essere maggiore di 0;
+        \item deve essere minore o uguale a \texttt{UPROCMAX};
+        \item non deve essere uguale a \texttt{SHELL\_ASID}.
+    \end{itemize}
+
+    \item Se i controlli sono superati, crea il nuovo U-proc tramite: \texttt{createUProc(asid)}
+
+
+    \item Se la creazione fallisce e viene restituito \texttt{NOPROC}, il processo chiamante viene terminato.
+
+    \item Dopo aver creato il nuovo processo, la shell viene bloccata con una \texttt{P} su \texttt{shellSemaphore}. In questo modo la shell rimane sospesa fino alla terminazione del processo figlio.
+
+    \item Quando il processo figlio termina, la \texttt{sys2()} del figlio esegue una \texttt{V} su \texttt{shellSemaphore}, sbloccando la shell.
+
+    \item Infine viene ricaricato lo stato salvato tramite \texttt{LDST(excState)}, permettendo alla shell di riprendere l'esecuzione.
+\end{enumerate}
+
+Questa syscall realizza quindi un modello di esecuzione sincrona: la shell lancia un programma e resta bloccata fino alla sua terminazione.
+
+
+\section{Inizializzazione degli U-proc}
+\vspace{0.5cm}
+\subsection{\texttt{initProc.c}: Inizializzazione del Support Level}
+
+Il modulo \texttt{initProc.c} contiene l'\textit{Instantiator Process}, cioè la funzione \texttt{test()}, e le strutture globali necessarie alla fase 3.
+
+\vspace{0.3cm}
+\subsubsection{Variabili globali}
+
+Le principali variabili globali definite nel modulo sono:
+
+\begin{itemize}
+    \item \texttt{masterSemaphore}: semaforo inizializzato a 0. Viene usato per bloccare l'Instantiator Process fino alla terminazione della shell.
+    \item \texttt{shellSemaphore}: semaforo inizializzato a 0. Viene usato per bloccare la shell mentre un programma lanciato tramite \texttt{SYS6} è in esecuzione.
+    \item \texttt{termWriteSemaphore}: semaforo di mutua esclusione per la scrittura sul terminale.
+    \item \texttt{termReadSemaphore}: semaforo di mutua esclusione per la lettura dal terminale.
+    \item \texttt{supportPool[UPROCMAX]}: array statico di \texttt{support\_t}, usato per assegnare una Support Structure a ogni U-proc.
+\end{itemize}
+
+\vspace{0.3cm}
+\subsubsection{\texttt{int createUProc(int asid)}}
+
+La funzione \texttt{createUProc()} crea un nuovo U-proc a partire dal suo ASID.
+
+Il suo funzionamento è il seguente:
+
+\begin{enumerate}
+    \item Controlla che l'ASID sia valido. Se l'ASID è minore o uguale a 0, oppure maggiore di \texttt{UPROCMAX}, viene invocata \texttt{PANIC()}.
+
+    \item Dichiara uno stato iniziale del processore: \texttt{state\_t procState}
+
+
+    \item Ricava la Support Structure associata all'ASID tramite: \texttt{\&supportPool[asid-1]}
+
+
+    \item Inizializza lo stato del processo e la sua Support Structure tramite: 
+    
+    \texttt{initUProc(asid, \&procState, support)}
+
+    \item Crea il processo tramite la syscall negativa \texttt{CREATEPROCESS}, passando:
+    \begin{itemize}
+        \item lo stato iniziale del processore;
+        \item la priorità \texttt{UPROC\_PRIORITY};
+        \item il puntatore alla Support Structure.
+    \end{itemize}
+
+    \item Restituisce il PID del processo creato, oppure \texttt{NOPROC} in caso di errore.
+\end{enumerate}
+
+\vspace{0.3cm}
+\subsubsection{\texttt{void test()}}
+
+La funzione \texttt{test()} rappresenta l'Instantiator Process della fase 3. Il suo compito è inizializzare il Support Level, avviare la shell e poi attendere la sua terminazione.
+
+Il comportamento della funzione è il seguente:
+
+\begin{enumerate}
+    \item Inizializza \texttt{masterSemaphore} e \texttt{shellSemaphore} a 0.
+
+    \item Inizializza i semafori del terminale:
+    \begin{itemize}
+        \item \texttt{termWriteSemaphore = 1};
+        \item \texttt{termReadSemaphore = 1}.
+    \end{itemize}
+
+    \item Invoca \texttt{initSwapPool()}, che inizializza le strutture dati per la memoria virtuale e la Swap Pool.
+
+    \item Crea la shell tramite: \texttt{createUProc(SHELL\_ASID)}
+
+
+    \item Se la creazione della shell fallisce, invoca \texttt{PANIC()}.
+
+    \item Esegue una \texttt{P} su \texttt{masterSemaphore}. In questo modo l'Instantiator Process resta bloccato finché la shell non termina.
+
+    \item Quando la shell termina, la sua \texttt{sys2()} esegue una \texttt{V} su \texttt{masterSemaphore}; a quel punto \texttt{test()} riprende l'esecuzione.
+
+    \item Infine termina se stesso tramite:
+        \texttt{SYSCALL(TERMPROCESS, 0, 0, 0)}
+
+\end{enumerate}
+
+La terminazione di \texttt{test()} porta il sistema alla conclusione ordinata, lasciando al Nucleus il compito di effettuare l'\texttt{HALT} quando non restano più processi attivi.
+\section{Testers}
+\vspace{0.5cm}
+\subsection{\texttt{shell.c}: Shell Utente}
+
+Il file \texttt{shell.c} implementa un semplice interprete di comandi testuale. La shell legge un comando da terminale, lo confronta con una tabella statica di programmi disponibili e, se il comando è valido, invoca la syscall \texttt{EXECUTE}.
+
+\vspace{0.3cm}
+\subsubsection{Mappatura tra comandi e ASID}
+
+La shell mantiene una tabella statica di associazione tra nome del programma e ASID:
+
+\begin{itemize}
+    \item \texttt{fibEight} $\rightarrow$ ASID 2
+    \item \texttt{echo} $\rightarrow$ ASID 3
+    \item \texttt{fibEleven} $\rightarrow$ ASID 4
+    \item \texttt{uname} $\rightarrow$ ASID 5
+    \item \texttt{date} $\rightarrow$ ASID 6
+    \item \texttt{sl} $\rightarrow$ ASID 7
+    \item \texttt{calc} $\rightarrow$ ASID 8
+\end{itemize}
+
+Questa mappatura permette alla shell di convertire il nome digitato dall'utente nell'ASID richiesto dalla syscall \texttt{SYS6}.
+
+\vspace{0.3cm}
+\subsubsection{\texttt{void trimSpaces(char *s)}}
+
+La funzione \texttt{trimSpaces()} rimuove gli spazi iniziali e finali dal comando inserito dall'utente.
+
+\vspace{0.3cm}
+\subsubsection{\texttt{void chkExitAndTerminate(char *buff)}}
+
+La funzione \texttt{chkExitAndTerminate()} controlla se il comando inserito è:
+\texttt{exit}
+
+In caso positivo invoca:
+\texttt{SYSCALL(TERMINATE, 0, 0, 0)}
+
+terminando la shell. La terminazione della shell sblocca poi l'Instantiator Process tramite il meccanismo implementato in \texttt{sys2()}.
+
+\vspace{0.3cm}
+\subsubsection{\texttt{void main()}}
+
+La funzione \texttt{main()} della shell contiene il ciclo principale dell'interprete.
+
+Il funzionamento è il seguente:
+
+\begin{enumerate}
+    \item Stampa il prompt:
+        \texttt{> }
+
+    \item Legge una riga da terminale tramite \texttt{READTERMINAL}.
+
+    \item Sostituisce il carattere newline finale con il terminatore di stringa \texttt{\textbackslash 0}.
+
+    \item Rimuove gli spazi iniziali e finali tramite \texttt{trimSpaces()}.
+
+    \item Controlla se il comando è \texttt{exit}. In tal caso termina la shell.
+
+    \item Se il comando è vuoto, ricomincia il ciclo.
+
+    \item Cerca il comando nella tabella statica dei programmi.
+
+    \item Se il comando viene trovato, invoca:
+        \texttt{SYSCALL(EXECUTE, excAsid, 0, 0)}
+
+    dove \texttt{excAsid} è l'ASID associato al programma.
+
+    \item Se il comando non viene trovato, stampa:
+        \texttt{command not found :<}
+
+\end{enumerate}
+
+La shell quindi fornisce un'interfaccia minimale per testare gli U-proc e le syscall positive del Support Level.
+
+\vspace{0.5cm}
+\subsection{\texttt{calc.c}: Programma Calcolatrice}
+
+Il file \texttt{calc.c} implementa un programma utente che esegue operazioni aritmetiche semplici tra due numeri a una cifra. Il programma viene avviato dalla shell tramite il comando: \texttt{calc}
+
+\vspace{0.3cm}
+\subsubsection{\texttt{void deleteSpaces(char *expr, int len, char *newExpr)}}
+
+La funzione \texttt{deleteSpaces()} copia l'espressione di input in una nuova stringa rimuovendo tutti gli spazi
+
+\vspace{0.3cm}
+\subsubsection{\texttt{int asciiToInt(char *expr, int *first, char *opr, int *second, int len)}}
+
+La funzione \texttt{asciiToInt()} effettua il parsing dell'espressione inserita dall'utente.
+
+Il comportamento è il seguente:
+
+\begin{enumerate}
+    \item Rimuove gli spazi dall'espressione tramite \texttt{deleteSpaces()}.
+
+    \item Converte il primo carattere in intero sottraendo il valore ASCII di \texttt{'0'}.
+
+    \item Verifica che il primo valore sia compreso tra 0 e 9. In caso contrario stampa un messaggio di errore e restituisce \texttt{-1}.
+
+    \item Controlla che l'operatore sia uno tra:
+    \begin{center}
+        \texttt{+}, \texttt{-}, \texttt{*}, \texttt{/}
+    \end{center}
+
+    \item Converte il secondo carattere in intero.
+
+    \item Verifica che anche il secondo valore sia compreso tra 0 e 9.
+
+    \item Se tutti i controlli hanno successo, restituisce \texttt{1}.
+\end{enumerate}
+
+\vspace{0.3cm}
+\subsubsection{\texttt{int calculate(int num1, char opr, int num2)}}
+
+La funzione \texttt{calculate()} esegue l'operazione aritmetica richiesta.
+
+Nel caso di divisione per zero, il programma stampa un messaggio di errore e termina tramite:
+\texttt{SYSCALL(TERMINATE, 0, 0, 0)}
+
+\vspace{0.3cm}
+\subsubsection{\texttt{void main()}}
+
+La funzione \texttt{main()} di \texttt{calc} rappresenta il flusso principale del programma.
+
+Il comportamento è il seguente:
+
+\begin{enumerate}
+    \item Stampa il messaggio:
+        \texttt{insert expression}
+
+    \item Legge l'espressione da terminale tramite \texttt{READTERMINAL}.
+
+    \item Invoca \texttt{asciiToInt()} per convertire l'input in:
+    \begin{itemize}
+        \item primo operando;
+        \item operatore;
+        \item secondo operando.
+    \end{itemize}
+
+    \item Se il parsing fallisce, termina il processo tramite \texttt{TERMINATE}.
+
+    \item Calcola il risultato tramite \texttt{calculate()}.
+
+    \item Converte il risultato in caratteri ASCII e lo inserisce in \texttt{res\_buffer}.
+
+    \item Stampa il risultato tramite \texttt{WRITETERMINAL}.
+
+    \item Termina il processo tramite:
+        \texttt{SYSCALL(TERMINATE, 0, 0, 0)}
+
+\end{enumerate}
 \end{enumerate}
 \end{document}
