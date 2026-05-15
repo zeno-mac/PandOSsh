@@ -141,7 +141,7 @@ void sys5(support_t *sup) {
     char *buf = (char *)excState->reg_a1;
 
     /* Valida indirizzo */
-    if ((unsigned int)buf < KUSEG) {
+    if ((unsigned int)buf < KUSEG || (unsigned int)buf >= USERSTACKTOP) {
         sys2(sup);
         return;
     }
