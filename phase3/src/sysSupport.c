@@ -8,6 +8,26 @@
 
 extern int swapSemaphore;
 extern int holdingSwapMutex[UPROCMAX];
+
+/*
+ * Support Level general exception handler.
+ *
+ * This function is the entry point for all non-TLB exceptions that the
+ * Nucleus passes up to the Support Level using the GENERALEXCEPT index.
+ *
+ * General exceptions include:
+ * - positive syscalls requested by U-procs;
+ * - Program Trap exceptions.
+ *
+ * The saved processor state of the exception is stored inside the current
+ * process Support Structure, in sup_exceptState[GENERALEXCEPT].
+ *
+ * The handler retrieves the Support Structure of the current process, reads
+ * the exception cause from the saved state, and dispatches the exception to
+ * the proper Support Level handler:
+ * - positive syscall exceptions are handled by pos_syscallHandler();
+ * - all other general exceptions are treated as Program Traps.
+ */
 void generalExceptionHandler() {
 
     support_t *sup = (support_t *)SYSCALL(GETSUPPORTPTR, 0, 0, 0);
@@ -22,9 +42,21 @@ void generalExceptionHandler() {
         programTrapHandler(sup);
 }
 
+/*
+ * Support Level Program Trap handler.
+ *
+ * Program Traps represent invalid or illegal actions performed by a U-proc,
+ * such as invalid instructions, invalid memory accesses, or unsupported
+ * exception causes.
+ *
+ * According to the Phase 3 policy, Program Traps are handled by terminating
+ * the offending U-proc in an ordered way. The actual termination and cleanup
+ * logic is implemented by sys2().
+ */
 void programTrapHandler(support_t *sup) {
     sys2(sup);
 }
+
 /*
  * Handles positive syscalls requested by U-procs.
  *
