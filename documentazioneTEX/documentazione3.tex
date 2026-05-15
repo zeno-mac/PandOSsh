@@ -337,7 +337,7 @@ Il comportamento è il seguente:
  
 \begin{enumerate}
     \item \textbf{Validazione indirizzo:} il buffer deve trovarsi in \texttt{kuseg}
-          (\texttt{buf >= KUSEG}). Altrimenti il processo viene terminato.
+          (\texttt{buf >= KUSEG || buf < USERSTACKTOP}). Altrimenti il processo viene terminato.
  
     \item Chiama \texttt{readTerminal(buf)} e salva il risultato in \texttt{reg\_a0}.
  
