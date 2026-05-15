@@ -30,12 +30,48 @@ Le variabili globali e le strutture definite nel modulo sono:
 
 \subsubsection{\texttt{void initPagetable(pteEntry\_t *pageTable, int asid)}}
 
+La funzione inizializza la Page Table a 32 voci di un U-proc. Tutte le voci vengono marcate come non valide (V=0), abilitando la scrittura (D=1) e private rispetto all'ASID (G=0); nessuna pagina è presente in RAM finché un page fault non la carica.
+
+Il comportamento è il seguente:
+
+\begin{enumerate}
+    \item \textbf{Voci 0--30} (testo e dati): \texttt{EntryHi} viene impostato con il VPN
+    (\texttt{KUSEG + i}) e l'ASID; \texttt{EntryLo} con \texttt{DIRTYON} (D=1, V=0, G=0).
+    \item \textbf{Voce 31} (stack): \texttt{EntryHi} viene impostato con il VPN
+    \texttt{0xBFFFF}; il top della pagina di stack è \texttt{0xC0000000}, punto di
+    partenza dello SP. \texttt{EntryLo} viene impostato con \texttt{DIRTYON}.
+\end{enumerate}
 
 \subsubsection{\texttt{void uTLB\_RefillHandler(void)}}
 
+Questa funzione è il gestore degli eventi di TLB-Refill: viene invocata quando la traduzione di un indirizzo logico non trova una voce corrispondente nel TLB. Esegue in kernel-mode con gli interrupt disabilitati, usando lo stack del Nucleus (come gli altri handler del Livello 3/Fase 2).
+
+Il comportamento è il seguente:
+
+\begin{enumerate}
+    \item Legge lo stato del processore salvato dal BIOS in \texttt{BIOSDATAPAGE}. Il campo \texttt{EntryHi} di questo stato contiene il VPN dell'indirizzo che ha causato il miss.
+    \item Ricava l'indice nella Page Table tramite \texttt{missingVPN \% MAXPAGES}:
+    i VPN del testo/dati (\texttt{0x80000}--\texttt{0x8001E}) producono 0--30, mentre
+    il VPN dello stack (\texttt{0xBFFFF}) produce esattamente 31 per le proprietà
+    dell'aritmetica modulo 32.
+    \item Carica la voce della Page Table nel TLB tramite le istruzioni \texttt{setENTRYHI}, \texttt{setENTRYLO} e \texttt{TLBWR}.
+    \item Restituisce il controllo al processo corrente tramite \texttt{LDST} sullo stato salvato, in modo che l'istruzione che ha causato il miss venga rieseguita.
+\end{enumerate}
 
 \subsubsection{\texttt{void initSwapPool()}}
 
+La funzione inizializza la tabella della Swap Pool e porta il semaforo associato al valore 1, come richiesto dalla specifica per garantire la mutua esclusione.
+
+Il comportamento è il seguente:
+
+\begin{enumerate}
+    \item Per ciascuno dei \texttt{POOLSIZE} frame, inizializza la voce con:
+    \begin{itemize}
+        \item \texttt{sw\_asid = -1}: segnala che il frame è libero (tutti gli ASID validi sono positivi).
+        \item \texttt{sw\_pageNo = -1} e \texttt{sw\_pte = NULL}: campi non significativi finché il frame è libero.
+    \end{itemize}
+    \item Esegue una \texttt{VERHOGEN} su \texttt{swapSemaphore}, portandolo da 0 (zero-initialization del C) a 1, inizializzandolo così come semaforo di mutua esclusione.
+\end{enumerate}
 
 \subsubsection{\texttt{int getFlashBlock(int vpn)} e \texttt{devreg\_t *getFlashRegister(int asid)}}
 \begin{enumerate}
