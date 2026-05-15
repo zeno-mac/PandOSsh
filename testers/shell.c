@@ -1,5 +1,6 @@
 #include <uriscv/liburiscv.h>
 
+#include "../headers/const.h"
 #include "h/print.h"
 #include "h/tconst.h"
 
@@ -60,7 +61,7 @@ void main() {
 
     char *startPrompt = "> ";
     char *unknownProg = "command not found :<\n";
-    char buffer[80];
+    char buffer[MAXSTRLENG];
     int found, excAsid;
     while (1) {
         SYSCALL(WRITETERMINAL, (int)startPrompt, 2, 0);
