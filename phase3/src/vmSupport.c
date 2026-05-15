@@ -13,39 +13,37 @@
 
 // PoolSize = (UPROCMAX * 2) = 16 Frames
 swap_t swapPool[POOLSIZE];
+// The semaphore for the Swap Pool will be set to 1 by initSwapPool()
 int swapSemaphore = 0;
 
 // Forse meglio definirla da un'altra parte?
 int holdingSwapMutex[UPROCMAX] = {0};
 
-// Initialize the page table of U-Proc given the page table and the asi
+// Sets up the 32-entry Page Table for a U-proc. All entries start invalid (V=0),
+// write-enabled (D=1), and private (G=0); no page is present in RAM until a page fault loads it.
 void initPagetable(pteEntry_t *pageTable, int asid)
 {
-    // The first 31 entries are for the .text and .data pages  the logical address space
+    // Entries 0–30: text and data pages, VPNs 0x80000–0x8001E.
     for (int i = 0; i < MAXPAGES - 1; i++)
     {
-        // The VPN field will be from 0x8000 to 0x8001E
         pageTable[i].pte_entryHI = (KUSEG + (i << VPNSHIFT)) | (asid << ASIDSHIFT);
-        pageTable[i].pte_entryLO = DIRTYON;
+        pageTable[i].pte_entryLO = DIRTYON; // D=1, V=0, G=0
     }
-    // The final entry is for the U-Proc's stack page
+    // Entry 31: stack page, VPN 0xBFFFF (top of kuseg; SP is initialized to 0xC0000000).
     pageTable[31].pte_entryHI = (0xBFFFF << VPNSHIFT) | (asid << ASIDSHIFT);
-    // TODO Global set to 1 or 0? Nelle specifiche segna Global set to 1 (off),
-    // DIRTYON = each page is write-enabled
-    // GLOBALOFF = the pages are private
-    // VALIDOFF = the entry is not valid
     pageTable[31].pte_entryLO = DIRTYON;
 }
 
-// Initialize the swap pool structure
+// Marks every Swap Pool frame as unoccupied and initializes the swap semaphore to 1.
 void initSwapPool()
 {
     for (int i = 0; i < POOLSIZE; i++)
     {
-        swapPool[i].sw_asid = -1;   // -1 = The frame is unoccupied
-        swapPool[i].sw_pageNo = -1; // -1 = The page number is non valid
+        swapPool[i].sw_asid = -1; // -1 signals unoccupied (all valid ASIDs are positive)
+        swapPool[i].sw_pageNo = -1;
         swapPool[i].sw_pte = NULL;
     }
+    // swapSemaphore is zero-initialized by C; one V brings it to 1 for mutual exclusion.
     SYSCALL(VERHOGEN, (int)&swapSemaphore, 0, 0);
 }
 
