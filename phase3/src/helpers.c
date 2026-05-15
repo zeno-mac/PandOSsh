@@ -2,54 +2,58 @@
 #include "../../headers/const.h"
 #include <uriscv/liburiscv.h>
 /*
- * Queste funzioni sono implementate in altri moduli della Phase 3.
+ * These handlers are implemented in other Phase 3 modules.
  *
  * pager:
- *   gestore delle eccezioni TLB/Page Fault.
+ *   Support Level TLB exception handler. It handles page faults.
  *
  * generalExceptionHandler:
- *   gestore generale delle eccezioni del Support Level:
- *   syscall positive + program trap.
+ *   Support Level general exception handler. It handles positive syscalls
+ *   and Program Trap exceptions.
  */
 extern void pager(void);
 extern void generalExceptionHandler(void);
 /*
- * Stato iniziale degli U-proc:
- * - user mode
- * - interrupt abilitati
+ * Initial status for U-procs:
+ * - user mode enabled;
+ * - global interrupt enable bit set.
  *
- * Il campo mie viene poi impostato separatamente a MIE_ALL.
+ * The mie register is initialized separately with MIE_ALL.
  */
 #define UPROC_STATUS (MSTATUS_MPP_U | MSTATUS_MIE_MASK)
 
 /*
- * Stato dei gestori del Support Level:
- * - kernel mode
- * - interrupt abilitati
+ * Status used by Support Level exception handlers:
+ * - kernel mode enabled;
+ * - global interrupt enable bit set.
  *
- * I gestori del Support Level vengono eseguiti in kernel mode.
+ * Support Level handlers execute in kernel mode even if the interrupted
+ * U-proc was executing in user mode.
  */
 #define SUPPORT_STATUS (MSTATUS_MPP_M | MSTATUS_MIE_MASK)
 
 /*
- * Ultimo indice della page table privata.
- * Le entry 0..30 sono per text/data.
- * L'entry 31 è per lo stack.
+ * Index of the last entry in the private page table.
+ *
+ * Entries 0..30 are used for text/data pages.
+ * Entry 31 is used for the user stack page.
  */
 #define STACK_PAGE_INDEX (USERPGTBLSIZE - 1)
 
 /*
- * Ultimo indice degli stack interni alla support_t.
- * Gli stack crescono verso il basso, quindi lo stack pointer
- * deve puntare alla fine dell'area allocata.
+ * Last valid index of the internal stacks stored inside support_t.
+ *
+ * Since stacks grow downward, the initial stack pointer must point to the
+ * end of the allocated stack area.
  */
 #define SUPPORT_STACK_LAST_INDEX 499
 
 /*
- * Azzera manualmente uno state_t.
+ * Clears all fields of a processor state.
  *
- * Evitiamo memset per restare coerenti con lo stile del progetto
- * e con il codice delle fasi precedenti.
+ * This function manually resets the state_t structure instead of using
+ * memset, keeping the code explicit and consistent with the rest of the
+ * project. All general purpose registers are also reset to zero.
  */
 static void clearState(state_t *state) {
   state->entry_hi = 0;
@@ -64,12 +68,15 @@ static void clearState(state_t *state) {
 }
 
 /*
- * Costruisce il valore EntryHI per una pagina privata di un U-proc.
+ * Builds the EntryHI value for a private page belonging to a U-proc.
  *
- * EntryHI contiene:
- * - VPN, cioè il numero di pagina virtuale;
- * - flag di segmento privato;
- * - ASID del processo.
+ * EntryHI contains:
+ * - the VPN, extracted from the virtual address;
+ * - the private segment flag;
+ * - the ASID of the process.
+ *
+ * The resulting value is later stored inside the private page table entry
+ * and used by the TLB refill handler when loading entries into the TLB.
  */
 static unsigned int makePrivateEntryHI(memaddr virtualAddress, int asid) {
   unsigned int vpn = virtualAddress & GETPAGENO;
@@ -80,12 +87,15 @@ static unsigned int makePrivateEntryHI(memaddr virtualAddress, int asid) {
 }
 
 /*
- * Inizializza una singola entry della page table privata.
+ * Initializes a single private page table entry.
  *
- * All'inizio nessuna pagina è caricata in RAM, quindi:
- * - V = 0, pagina non valida;
- * - D = 1, pagina scrivibile;
- * - PFN non impostato.
+ * At process creation time, no user page is loaded in RAM yet. For this
+ * reason, the entry is initialized as not valid. The dirty bit is set so
+ * that the page is considered writable once it is loaded by the pager.
+ *
+ * The physical frame number is not set here, because it will be filled
+ * later by the pager when the corresponding page is actually brought into
+ * the Swap Pool.
  */
 static void initPageTableEntry(pteEntry_t *entry, memaddr virtualAddress,
                                int asid) {
@@ -94,11 +104,14 @@ static void initPageTableEntry(pteEntry_t *entry, memaddr virtualAddress,
 }
 
 /*
- * Inizializza la page table privata dell'U-proc.
+ * Initializes the private page table of a U-proc.
  *
- * La page table ha 32 entry:
- * - entry 0..30: pagine text/data a partire da 0x80000000;
- * - entry 31: pagina dello stack, cioè 0xBFFFF000.
+ * Each U-proc owns a private page table with 32 entries:
+ * - entries 0..30 map the text/data logical pages, starting from KUSEG;
+ * - entry 31 maps the user stack page.
+ *
+ * All entries are initially invalid because pages are loaded on demand by
+ * the pager after a page fault.
  */
 static void initPageTable(support_t *support, int asid) {
   for (int i = 0; i < STACK_PAGE_INDEX; i++) {
@@ -106,22 +119,29 @@ static void initPageTable(support_t *support, int asid) {
     initPageTableEntry(&support->sup_privatePgTbl[i], virtualAddress, asid);
   }
 
-  /*
-   * Lo stack utente parte da 0xC0000000 e cresce verso il basso.
-   * Quindi la sua pagina effettiva inizia a:
-   *
-   * 0xC0000000 - 0x1000 = 0xBFFFF000
-   */
+    /*
+     * The user stack starts at USERSTACKTOP and grows downward.
+     * Therefore, the actual stack page starts one page before USERSTACKTOP.
+     *
+     * Example:
+     * 0xC0000000 - 0x1000 = 0xBFFFF000
+     */
   memaddr stackPageAddress = USERSTACKTOP - PAGESIZE;
 
   initPageTableEntry(&support->sup_privatePgTbl[STACK_PAGE_INDEX],
                      stackPageAddress, asid);
 }
 
+
 /*
- * Inizializza lo stato iniziale del processore dell'U-proc.
+ * Initializes the starting processor state of a U-proc.
  *
- * Questo è lo stato passato a CREATEPROCESS.
+ * This is the state passed to the Nucleus CREATEPROCESS syscall.
+ * The U-proc starts execution at UPROCSTARTADDR, uses USERSTACKTOP as its
+ * initial user stack pointer, runs in user mode and has interrupts enabled.
+ *
+ * The ASID is stored in EntryHI so that address translation can distinguish
+ * this process from the other U-procs.
  */
 static void initInitialProcessorState(state_t *state, int asid) {
   clearState(state);
@@ -136,8 +156,11 @@ static void initInitialProcessorState(state_t *state, int asid) {
 }
 
 /*
- * Inizializza il context usato quando viene passata verso l'alto
- * un'eccezione TLB/Page Fault.
+ * Initializes the Support Level context used for TLB exceptions.
+ *
+ * When the Nucleus passes up a TLB exception using the PGFAULTEXCEPT index,
+ * execution will continue at pager(). The stack pointer is set to the end
+ * of the TLB exception stack stored inside the Support Structure.
  */
 static void initPageFaultContext(support_t *support) {
   support->sup_exceptContext[PGFAULTEXCEPT].pc = (memaddr)pager;
@@ -149,10 +172,16 @@ static void initPageFaultContext(support_t *support) {
 }
 
 /*
- * Inizializza il context usato quando viene passata verso l'alto
- * un'eccezione generale:
- * - syscall positive;
- * - program trap.
+ * Initializes the Support Level context used for general exceptions.
+ *
+ * General exceptions include:
+ * - positive syscalls;
+ * - Program Trap exceptions.
+ *
+ * When the Nucleus passes up one of these exceptions using the
+ * GENERALEXCEPT index, execution will continue at generalExceptionHandler().
+ * The stack pointer is set to the end of the general exception stack stored
+ * inside the Support Structure.
  */
 static void initGeneralExceptionContext(support_t *support) {
   support->sup_exceptContext[GENERALEXCEPT].pc =
@@ -165,14 +194,21 @@ static void initGeneralExceptionContext(support_t *support) {
 }
 
 /*
- * Funzione pubblica usata da createUProc().
+ * Initializes all the data needed to create a U-proc.
  *
- * Inizializza tutto ciò che serve per creare un U-proc:
- * - stato iniziale del processore;
- * - ASID nella support structure;
- * - context per page fault;
- * - context per eccezioni generali;
- * - page table privata.
+ * This public helper is called by createUProc(). It prepares both the initial
+ * processor state passed to CREATEPROCESS and the Support Structure used by
+ * the Support Level.
+ *
+ * In particular, it initializes:
+ * - the ASID stored in the Support Structure;
+ * - the initial processor state of the U-proc;
+ * - the context for page fault exceptions;
+ * - the context for general exceptions;
+ * - the private page table.
+ *
+ * Invalid parameters are treated as fatal kernel errors because this function
+ * is part of the Support Level initialization path.
  */
 void initUProc(int asid, state_t *state, support_t *support) {
   if (asid <= 0 || asid > UPROCMAX || state == NULL || support == NULL) {
