@@ -15,7 +15,24 @@ extern int swapSemaphore;
 extern int termWriteSemaphore;
 extern int termReadSemaphore;
 extern swap_t swapPool[];
-
+/*
+ * Writes a string to terminal 0.
+ *
+ * This helper implements the low-level part of SYS4. Terminal output is
+ * performed character by character using the terminal transmitter sub-device.
+ *
+ * Access to the transmitter is protected by termWriteSemaphore, because the
+ * terminal is a shared device and only one process at a time should write to
+ * it.
+ *
+ * Parameters:
+ * - str: pointer to the first character to transmit;
+ * - len: number of characters to transmit.
+ *
+ * Returns:
+ * - the number of characters successfully transmitted;
+ * - a negative device status if the transmission fails.
+ */
 static int writeTerminal(char *str, int len) {
     termreg_t *term = (termreg_t *)DEV_REG_ADDR(IL_TERMINAL, 0);
     int transmitted = 0;
@@ -40,7 +57,22 @@ static int writeTerminal(char *str, int len) {
     SYSCALL(VERHOGEN, (int)&termWriteSemaphore, 0, 0);
     return transmitted;
 }
-
+/*
+ * Reads a line from terminal 0.
+ *
+ * This helper implements the low-level part of SYS5. Terminal input is read
+ * one character at a time using the terminal receiver sub-device.
+ *
+ * Access to the receiver is protected by termReadSemaphore, because terminal
+ * input is shared and only one process at a time should read from it.
+ *
+ * Parameters:
+ * - buf: user buffer where the received characters are stored.
+ *
+ * Returns:
+ * - the number of characters received;
+ * - a negative device status if the receive operation fails.
+ */
 static int readTerminal(char *buf) {
     termreg_t *term = (termreg_t *)DEV_REG_ADDR(IL_TERMINAL, 0);
     int received = 0;
@@ -57,7 +89,10 @@ static int readTerminal(char *buf) {
         }
 
         char c = (char)((status >> 8) & 0xFF);
-        buf[received++] = c;
+        if (received < MAXSTRLENG) {
+            buf[received] = c;
+            received++;
+        }
 
         if (c == '\n')
             break;
@@ -112,7 +147,21 @@ void sys2(support_t *sup) {
     SYSCALL(TERMPROCESS, 0, 0, 0);
 }
 
-// WRITETERMINAL
+/*
+ * SYS4 - WriteTerminal
+ *
+ * Writes a string from the U-proc logical address space to terminal 0.
+ *
+ * The U-proc passes:
+ * - the virtual address of the string in register a1;
+ * - the string length in register a2.
+ *
+ * The syscall validates the parameters, writes the string using
+ * writeTerminal(), stores the return value in a0 and restores the saved
+ * processor state.
+ *
+ * Invalid parameters cause the current U-proc to terminate.
+ */
 void sys4(support_t *sup) {
     state_t *excState = &(sup->sup_exceptState[GENERALEXCEPT]);
     
@@ -134,7 +183,19 @@ void sys4(support_t *sup) {
     LDST(excState);
 }
 
-// READTERMINAL
+/*
+ * SYS5 - ReadTerminal
+ *
+ * Reads a line from terminal 0 into a buffer in the U-proc logical address
+ * space.
+ *
+ * The U-proc passes the virtual address of the destination buffer in register
+ * a1. The syscall validates the address, reads from terminal using
+ * readTerminal(), stores the return value in a0 and restores the saved
+ * processor state.
+ *
+ * Invalid parameters cause the current U-proc to terminate.
+ */
 void sys5(support_t *sup) {
     state_t *excState = &(sup->sup_exceptState[GENERALEXCEPT]);
 
