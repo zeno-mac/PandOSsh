@@ -405,7 +405,8 @@ void nsys10(state_t *excState) {
 
     pcb_t *old_head = removeProcQ(&readyQueue);
     insertProcQ(&readyQueue, currProc);
-    list_add(&(old_head->p_list), &readyQueue);
+    if(old_head!=NULL){
+    list_add(&(old_head->p_list), &readyQueue);}
     currProc = NULL;
     dispatch();
     return;
