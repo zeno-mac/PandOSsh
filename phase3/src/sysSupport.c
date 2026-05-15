@@ -6,9 +6,6 @@
 #include <uriscv/cpu.h>
 #include <uriscv/liburiscv.h>
 
-extern int swapSemaphore;
-extern int holdingSwapMutex[UPROCMAX];
-
 /*
  * Support Level general exception handler.
  *
@@ -32,7 +29,6 @@ void generalExceptionHandler() {
 
     support_t *sup = (support_t *)SYSCALL(GETSUPPORTPTR, 0, 0, 0);
 
-    /* Estrai ExcCode: bit 6:2 del registro cause */
     unsigned int cause = sup->sup_exceptState[GENERALEXCEPT].cause;
     unsigned int excCode = cause & CAUSE_EXCCODE_MASK;
 

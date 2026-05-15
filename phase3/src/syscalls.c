@@ -24,20 +24,11 @@ extern swap_t swapPool[];
  * Access to the transmitter is protected by termWriteSemaphore, because the
  * terminal is a shared device and only one process at a time should write to
  * it.
- *
- * Parameters:
- * - str: pointer to the first character to transmit;
- * - len: number of characters to transmit.
- *
- * Returns:
- * - the number of characters successfully transmitted;
- * - a negative device status if the transmission fails.
  */
 static int writeTerminal(char *str, int len) {
     termreg_t *term = (termreg_t *)DEV_REG_ADDR(IL_TERMINAL, 0);
     int transmitted = 0;
 
-    /* Spec 7.2: "suspended until a line of output has been transmitted" */
     SYSCALL(PASSEREN, (int)&termWriteSemaphore, 0, 0);
 
     for (int i = 0; i < len; i++) {
@@ -66,17 +57,11 @@ static int writeTerminal(char *str, int len) {
  * Access to the receiver is protected by termReadSemaphore, because terminal
  * input is shared and only one process at a time should read from it.
  *
- * Parameters:
- * - buf: user buffer where the received characters are stored.
- *
- * Returns:
- * - the number of characters received;
- * - a negative device status if the receive operation fails.
  */
 static int readTerminal(char *buf) {
     termreg_t *term = (termreg_t *)DEV_REG_ADDR(IL_TERMINAL, 0);
     int received = 0;
-    /* Spec 7.3: "suspended until a line of input has been transmitted" */
+
     SYSCALL(PASSEREN, (int)&termReadSemaphore, 0, 0);
 
     while (1) {
@@ -89,10 +74,9 @@ static int readTerminal(char *buf) {
         }
 
         char c = (char)((status >> 8) & 0xFF);
-        if (received < MAXSTRLENG) {
-            buf[received] = c;
-            received++;
-        }
+
+        buf[received] = c;
+        received++;
 
         if (c == '\n')
             break;
@@ -201,7 +185,6 @@ void sys5(support_t *sup) {
 
     char *buf = (char *)excState->reg_a1;
 
-    /* Valida indirizzo */
     if ((unsigned int)buf < KUSEG || (unsigned int)buf >= USERSTACKTOP) {
         sys2(sup);
         return;
