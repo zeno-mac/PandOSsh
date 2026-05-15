@@ -67,7 +67,22 @@ static int readTerminal(char *buf) {
     return received;
 }
 
-// TERMINATE
+/*
+ * SYS2 - Terminate
+ *
+ * Terminates the current U-proc in an ordered way.
+ *
+ * This function is used both when a user process explicitly requests
+ * TERMINATE and when the Support Level decides to kill a process because of
+ * an invalid syscall or a Program Trap.
+ *
+ * Before invoking the Nucleus termination service, the function performs the
+ * required Support Level cleanup:
+ * - releases the Swap Pool mutex if the process was holding it;
+ * - wakes up the Instantiator Process if the terminating process is the shell;
+ * - wakes up the shell if the terminating process is a child program;
+ * - marks all Swap Pool frames owned by this ASID as free.
+ */
 void sys2(support_t *sup) {
     int asid = sup->sup_asid;
 
@@ -135,7 +150,19 @@ void sys5(support_t *sup) {
     LDST(excState);
 }
 
-// EXECUTE
+/*
+ * SYS6 - Execute
+ *
+ * Creates and executes a new U-proc.
+ *
+ * This syscall is intended to be used only by the shell. The shell passes the
+ * ASID of the program to execute in register a1. The Support Level validates
+ * the request, creates the corresponding U-proc and then blocks the shell
+ * until that U-proc terminates.
+ *
+ * This implements a synchronous execution model:
+ * the shell starts a program, waits for its termination, and then resumes.
+ */
 void sys6(support_t *sup) {
     state_t *excState = &(sup->sup_exceptState[GENERALEXCEPT]);
 
