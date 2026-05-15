@@ -18,18 +18,23 @@ static struct mapAsid arr[] = {
     {"sl", 7},
     {"calc", 8},
 };
-
+/*
+ * Removes leading and trailing spaces from the input string.
+ *
+ * This allows the shell to accept commands even if the user inserts
+ * extra spaces before or after the program name.
+ */
 void trimSpaces(char *s) {
     int start = 0;
     int end = 0;
     int write = 0;
 
-    /* trova il primo carattere non spazio */
+    /* Find the first non-space character. */
     while (s[start] == ' ') {
         start++;
     }
 
-    /* sposta la stringa a sinistra */
+    /* Shift the useful part of the string to the beginning. */
     while (s[start] != '\0') {
         s[write] = s[start];
         start++;
@@ -38,7 +43,7 @@ void trimSpaces(char *s) {
 
     s[write] = '\0';
 
-    /* rimuove gli spazi finali */
+    /* Find the end of the trimmed string. */
     end = 0;
     while (s[end] != '\0') {
         end++;
@@ -50,6 +55,12 @@ void trimSpaces(char *s) {
     }
 }
 
+/*
+ * Checks whether the user typed "exit".
+ *
+ * If so, the shell terminates itself using the positive TERMINATE syscall.
+ * This will also unblock the Instantiator Process through the SYS2 handler.
+ */
 void chkExitAndTerminate(char *buff) {
     if (buff[0] == 'e' && buff[1] == 'x' && buff[2] == 'i' && buff[3] == 't' &&
         buff[4] == '\0') {
@@ -57,6 +68,19 @@ void chkExitAndTerminate(char *buff) {
     }
 }
 
+/*
+ * Main loop of the user shell.
+ *
+ * The shell repeatedly:
+ * - prints the prompt;
+ * - reads a command from terminal;
+ * - trims spaces;
+ * - checks for the "exit" command;
+ * - searches the command in the static name-to-ASID table;
+ * - executes the selected program using the EXECUTE syscall.
+ *
+ * If the command is unknown, an error message is printed.
+ */
 void main() {
 
     char *startPrompt = "> ";
