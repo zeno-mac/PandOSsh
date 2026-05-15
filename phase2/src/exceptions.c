@@ -12,21 +12,24 @@
 
 extern pcb_t *currProc;
 
-// The the TLB_Refill is called when a logical address translation’s search of the of the TLB for a matching entry fails
-// The TLB-Refill inserts the missing Page Table entry and restart the instruction
+// TLB cache-miss handler: loads the missing Page Table entry into the TLB and retries the faulting instruction.
+// Runs in kernel-mode with interrupts disabled, using the Nucleus stack (Level 3/Phase 2 handler).
 void uTLB_RefillHandler(void) {
 
+    // The BIOS saves the processor state at BIOSDATAPAGE on a TLB-Refill event;
+    // EntryHi holds the VPN of the address that caused the miss.
     state_t *saved_state = (state_t *)BIOSDATAPAGE;
-
     unsigned int missingVPN = (saved_state->entry_hi & GETPAGENO) >> VPNSHIFT;
 
+    // Map VPN to a Page Table index. Text/data VPNs (0x80000–0x8001E) give indices 0–30;
+    // the stack VPN (0xBFFFF) gives index 31 because 0xBFFFF % 32 == 31.
     pteEntry_t *pageTable = currProc->p_supportStruct->sup_privatePgTbl;
     int pageIndex = missingVPN % MAXPAGES;
 
+    // Write the Page Table entry into the TLB and retry the faulting instruction.
     setENTRYHI(pageTable[pageIndex].pte_entryHI);
     setENTRYLO(pageTable[pageIndex].pte_entryLO);
     TLBWR();
-
     LDST(saved_state);
 }
 
