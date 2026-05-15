@@ -75,8 +75,11 @@ static int readTerminal(char *buf) {
 
         char c = (char)((status >> 8) & 0xFF);
 
-        buf[received] = c;
-        received++;
+        if (received < MAXSTRLENG)
+        {
+            buf[received] = c;
+            received++;
+        }
 
         if (c == '\n')
             break;
