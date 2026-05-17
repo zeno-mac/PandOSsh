@@ -3,6 +3,7 @@
 #include "../../headers/types.h"
 #include "../../phase2/headers/auxfun.h"
 #include "../headers/initProc.h"
+#include "../headers/vmSupport.h"
 #include <uriscv/arch.h>
 #include <uriscv/liburiscv.h>
 #include <uriscv/types.h>
@@ -75,8 +76,7 @@ static int readTerminal(char *buf) {
 
         char c = (char)((status >> 8) & 0xFF);
 
-        if (received < MAXSTRLENG)
-        {
+        if (received < MAXSTRLENG) {
             buf[received] = c;
             received++;
         }
@@ -119,17 +119,9 @@ void sys2(support_t *sup) {
         SYSCALL(VERHOGEN, (int)&shellSemaphore, 0, 0);
     }
 
-
     // Optimization number 2:
     // When a U-proc terminates, mark all of the frames it occupied as unoccupied
-    SYSCALL(PASSEREN, (int)&swapSemaphore, 0, 0);
-    for (int j = 0; j < POOLSIZE; j++)
-    {
-        if (swapPool[j].sw_asid == asid)
-            swapPool[j].sw_asid = -1;
-    }
-    SYSCALL(VERHOGEN, (int)&swapSemaphore, 0, 0);
-
+    freeSwapFrames(asid);
 
     SYSCALL(TERMPROCESS, 0, 0, 0);
 }
@@ -151,7 +143,7 @@ void sys2(support_t *sup) {
  */
 void sys4(support_t *sup) {
     state_t *excState = &(sup->sup_exceptState[GENERALEXCEPT]);
-    
+
     char *str = (char *)excState->reg_a1;
     int len = (int)excState->reg_a2;
 

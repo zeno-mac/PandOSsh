@@ -45,7 +45,7 @@ int asciiToInt(char *expr, int *first, char *opr, int *second, int len) {
         newExpr[1] == '/') {
         *opr = newExpr[1];
     } else {
-        char *error = "not an allowed operand\n";
+        char *error = "not an allowed operation\n";
         SYSCALL(WRITETERMINAL, (int)error, 23, 0);
         return -1;
     }
