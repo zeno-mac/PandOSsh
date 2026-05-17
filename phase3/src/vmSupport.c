@@ -21,11 +21,9 @@ int holdingSwapMutex[UPROCMAX] = {0};
 
 // Sets up the 32-entry Page Table for a U-proc. All entries start invalid (V=0),
 // write-enabled (D=1), and private (G=0); no page is present in RAM until a page fault loads it.
-void initPagetable(pteEntry_t *pageTable, int asid)
-{
+void initPagetable(pteEntry_t *pageTable, int asid) {
     // Entries 0–30: text and data pages, VPNs 0x80000–0x8001E.
-    for (int i = 0; i < MAXPAGES - 1; i++)
-    {
+    for (int i = 0; i < MAXPAGES - 1; i++) {
         pageTable[i].pte_entryHI = (KUSEG + (i << VPNSHIFT)) | (asid << ASIDSHIFT);
         pageTable[i].pte_entryLO = DIRTYON; // D=1, V=0, G=0
     }
@@ -35,10 +33,8 @@ void initPagetable(pteEntry_t *pageTable, int asid)
 }
 
 // Marks every Swap Pool frame as unoccupied and initializes the swap semaphore to 1.
-void initSwapPool()
-{
-    for (int i = 0; i < POOLSIZE; i++)
-    {
+void initSwapPool() {
+    for (int i = 0; i < POOLSIZE; i++) {
         swapPool[i].sw_asid = -1; // -1 signals unoccupied (all valid ASIDs are positive)
         swapPool[i].sw_pageNo = -1;
         swapPool[i].sw_pte = NULL;
@@ -47,14 +43,44 @@ void initSwapPool()
     SYSCALL(VERHOGEN, (int)&swapSemaphore, 0, 0);
 }
 
+/*
+ * Frees all Swap Pool frames owned by the given ASID.
+ *
+ * The related Page Table entries are invalidated, the Swap Pool metadata is
+ * cleared, and the TLB is flushed to remove stale translations before the
+ * frames can be reused by other U-procs.
+ */
+void freeSwapFrames(int asid) {
+    SYSCALL(PASSEREN, (int)&swapSemaphore, 0, 0);
+
+    int oldStatus = getSTATUS();
+    setSTATUS(oldStatus & ~MSTATUS_MIE_MASK);
+
+    for (int j = 0; j < POOLSIZE; j++) {
+        if (swapPool[j].sw_asid == asid) {
+            if (swapPool[j].sw_pte != NULL) {
+                swapPool[j].sw_pte->pte_entryLO &= ~VALIDON;
+            }
+
+            swapPool[j].sw_asid = -1;
+            swapPool[j].sw_pageNo = -1;
+            swapPool[j].sw_pte = NULL;
+        }
+    }
+
+    TLBCLR();
+
+    setSTATUS(oldStatus);
+
+    SYSCALL(VERHOGEN, (int)&swapSemaphore, 0, 0);
+}
 // SEZIONE 5.1 - Mazzo
 
 // funzione aux per ricavare il blocco dato il VPN - Virtual Page Number
 // blocco 31 <=> vpn 0xBFFFF
 // blocchi[0..30] <=> vpn 0x80000,0x80001,..,0x8001E
 // quindi per vpn=0x80002 il blocco è il 2
-int getFlashBlock(int vpn)
-{
+int getFlashBlock(int vpn) {
     if (vpn == 0xBFFFF)
         return 31;
     else
@@ -64,8 +90,7 @@ int getFlashBlock(int vpn)
 // funzione aux per calcolare l'addr base dei registri dei flash dev
 // ogni processo utente ha un suo flash dev il cui asid va da 1..8,
 // segue che i registi vanno da 0..7 = (1..8)-1
-devreg_t *getFlashRegister(int asid)
-{
+devreg_t *getFlashRegister(int asid) {
     int devNo = asid - 1;
     if (devNo < 0 || devNo >= UPROCMAX)
         return NULL;
@@ -87,13 +112,11 @@ request a NSYS5: int ioStatus = SYSCALL(DOIO, int *commandAddr, int
 commandValue, 0); Where the mnemonic constant DOIO has the value of -5.
 
 */
-int readWriteFlashdrive(int asid, int vpn, int phisicalFrame, int op)
-{
+int readWriteFlashdrive(int asid, int vpn, int phisicalFrame, int op) {
     int block = getFlashBlock(vpn);
     devreg_t *reg = getFlashRegister(asid);
 
-    if (block < 0 || block >= MAXPAGES || reg == NULL)
-    {
+    if (block < 0 || block >= MAXPAGES || reg == NULL) {
         return -1;
     }
 
@@ -109,8 +132,7 @@ int readWriteFlashdrive(int asid, int vpn, int phisicalFrame, int op)
 
 // SEZIONE 4.2 - Mazzo
 
-void pager()
-{
+void pager() {
     // Obtain the pointer to the Current Process’s Support Structure: NSYS8.
     support_t *suppPtr = (support_t *)SYSCALL(GETSUPPORTPTR, 0, 0, 0);
     // Determine the cause of the TLB exception. The saved exception state
@@ -120,12 +142,11 @@ void pager()
     cause = cause & CAUSE_EXCCODE_MASK;
 
     // if the Cause is a TLB-Mod exception, treat it as a program trap.
-    if (cause == EXC_MOD)
-    {
+    if (cause == EXC_MOD) {
         programTrapHandler(suppPtr);
     }
 
-    //Gain mutual exclusion over the Swap Pool table (NSYS3)
+    // Gain mutual exclusion over the Swap Pool table (NSYS3)
     SYSCALL(PASSEREN, (int)&swapSemaphore, 0, 0);
     holdingSwapMutex[suppPtr->sup_asid - 1] = 1;
     // determine the missing page number: found in the saved exception state’s
@@ -135,17 +156,17 @@ void pager()
 
     /*First check for an unoccupied frame before selecting an occupied frame to use.
      This will turn an O(1) operation into an O(n) operation in exchange for fewer I/O (write) operations. */
-    int i=-1;
-    for(int j=0; j<POOLSIZE; j++){
-        if(swapPool[j].sw_asid==-1){
-            i=j;
+    int i = -1;
+    for (int j = 0; j < POOLSIZE; j++) {
+        if (swapPool[j].sw_asid == -1) {
+            i = j;
             break;
         }
     }
     // Let's use a FIFO round-robin algorithm fo swap the pages to pick a frame
     // i from the Swap Pool.
     static int fifoCont = 0;
-    if(i==-1){
+    if (i == -1) {
         i = fifoCont;
         fifoCont = (fifoCont + 1) % POOLSIZE;
     }
@@ -153,8 +174,7 @@ void pager()
     int physicalFrame = FLASHPOOLSTART + (i * PAGESIZE);
 
     // Determine if frame i is occupied; examine entry i in the Swap Pool table
-    if (swapPool[i].sw_asid != -1)
-    {
+    if (swapPool[i].sw_asid != -1) {
         // Frame occupied: assume it is occupied by logical page number k
         // belonging to process x (ASID) and that it is “dirty”
         int x = swapPool[i].sw_asid;
@@ -172,8 +192,7 @@ void pager()
         // Simple implementation: TLBCLR();
         setENTRYHI(swapPool[i].sw_pte->pte_entryHI);
         TLBP();
-        if ((getINDEX() & 0x80000000) == 0)
-        {
+        if ((getINDEX() & 0x80000000) == 0) {
             setENTRYLO(swapPool[i].sw_pte->pte_entryLO);
             TLBWI();
         }
@@ -190,8 +209,7 @@ void pager()
 
     int ioStatus = readWriteFlashdrive(suppPtr->sup_asid, missingPageNo, physicalFrame, FLASHREAD);
 
-    if (ioStatus != 1)
-    {
+    if (ioStatus != 1) {
         // if status!=READY call the Trap Handler
         holdingSwapMutex[suppPtr->sup_asid - 1] = 0; // Aggiunta per luca----------------------
         SYSCALL(VERHOGEN, (int)&swapSemaphore, 0, 0);
@@ -223,8 +241,7 @@ void pager()
     // Simple implementation: TLBCLR();
     setENTRYHI(swapPool[i].sw_pte->pte_entryHI);
     TLBP();
-    if ((getINDEX() & 0x80000000) == 0)
-    {
+    if ((getINDEX() & 0x80000000) == 0) {
         setENTRYLO(swapPool[i].sw_pte->pte_entryLO);
         TLBWI();
     }
