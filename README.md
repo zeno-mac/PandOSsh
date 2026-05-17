@@ -269,6 +269,7 @@ To compile and run the project using cmake follow these instructions using the t
 ## Building
 
 ```bash
+make -C testers/
 cmake -B build
 cmake --build build
 ```
